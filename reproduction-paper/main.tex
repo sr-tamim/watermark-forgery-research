@@ -1,0 +1,922 @@
+\documentclass[10pt,twocolumn]{article}
+% ---- preamble (was secpaper.sty) ----
+\usepackage[letterpaper,margin=0.75in,columnsep=0.25in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[font=small,labelfont=bf,skip=4pt]{caption}
+\usepackage{balance}
+\usepackage[hidelinks,breaklinks]{hyperref}
+\usepackage{url}
+
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+
+% --- section headings, IEEE-ish -------------------------------------------
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\itshape}{\thesubsubsection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt}{3pt}
+
+% --- code listings --------------------------------------------------------
+\definecolor{cmtgray}{gray}{0.42}
+\definecolor{kwblue}{RGB}{20,60,140}
+\definecolor{strgreen}{RGB}{20,110,60}
+\definecolor{rulegray}{gray}{0.80}
+
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{kwblue},
+  commentstyle=\color{cmtgray}\itshape,
+  stringstyle=\color{strgreen},
+  numbers=left,
+  numberstyle=\tiny\color{cmtgray},
+  numbersep=5pt,
+  frame=tb,
+  rulecolor=\color{rulegray},
+  framesep=3pt,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=true,
+  captionpos=b,
+  aboveskip=6pt,
+  belowskip=4pt,
+  xleftmargin=10pt,
+}
+\lstset{style=py}
+\renewcommand{\lstlistingname}{Listing}
+
+% --- shorthand ------------------------------------------------------------
+\newcommand{\code}[1]{\texttt{\small #1}}
+\makeatletter
+\newcommand{\symfootnote}[2]{\begingroup
+  \renewcommand\thefootnote{#1}\footnotetext{#2}\endgroup}
+\makeatother
+\newcommand{\NUM}[1]{\textcolor{red}{\textbf{[#1]}}}
+
+\newcommand{\xstat}{\ensuremath{x}}
+\newcommand{\lam}{\ensuremath{\lambda}}
+% ---- end preamble ----
+
+\title{\vspace{-1.5em}\Large\bf Forging Tree-Ring: A Reproduction Study of
+Semantic Watermark Forgery}
+
+\author{
+{\normalsize Saifur Rahman Tamim\textsuperscript{1}$^{*}$,
+ Md Taslimul Hasan Toufique\textsuperscript{1},
+ Fahim Ibney Hafiz\textsuperscript{1},
+ and A.M.\,Tayeful Islam\textsuperscript{1}}\\[4pt]
+{\small Project Group 7\,$^{\dagger}$}\\
+{\small \textsuperscript{1}Department of Computer Science and Engineering}\\
+{\small Northern University Bangladesh, Dhaka, Bangladesh}\\[3pt]
+{\small\ttfamily \{tamim\_41230201087,\ hafiz\_41230301887,\
+ tayef\_nubcse\}@nub.ac.bd}\\
+{\small\ttfamily ripperthemodder@gmail.com}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\symfootnote{$*$}{Lead author. Contributions are itemised in the Division of Work.}
+\symfootnote{$\dagger$}{This paper serves as the final project report for
+CSE 4383: Image Processing and Computer Vision Lab Work, Northern University Bangladesh.}
+\begin{abstract}
+Semantic watermarking schemes such as Tree-Ring embed a detectable pattern in the
+initial noise latent of a diffusion model. Recent work has shown these watermarks to
+be not merely removable but \emph{forgeable}: an attacker holding no watermarking key
+can produce images that a genuine detector accepts. We reproduce the Reprompt forgery
+attack of M\"uller et al.\ against Tree-Ring on Stable Diffusion~XL, using the
+authors' released implementation, on free-tier hardware providing roughly a third of
+the memory of the original evaluation environment.
+
+The attack reproduces. Across six trials of three arms, genuine images are detected
+at $6/6$, clean images at $0/6$, and forged images at $5/6$, at a cost of $338.3$\,s
+per attack against the $30$\,s reported on datacentre hardware. Three further results
+follow. First, the released detector computes a non-central $\chi^2$ statistic and
+returns only its CDF; we recover the discarded statistic with exact agreement against
+the released detector, and show that two natural scores derived from it separate the
+forged arm from the clean null at AUC $0.861$ and $0.972$ respectively --- on
+identical samples, making the choice of score a modelling decision rather than a
+presentational one. Second, our forged detection rate of $0.83$ falls below the
+$0.97$ reported originally, and the single failure is a forgery whose statistic lies
+inside the clean range; we report the divergence rather than resolve it at $n=6$.
+Third, we report two predictions drawn from source inspection that our own
+measurements contradicted. We release the notebook, the pinned fork, and all
+measurement artifacts.
+\end{abstract}
+
+\section{Introduction}
+
+Text-to-image diffusion models are now widely deployed, and the question of whether
+a given image was machine-generated has moved from a research curiosity to a
+regulatory requirement. Watermarking is the dominant technical answer. Among
+watermarking families, \emph{semantic} schemes are the most promising: rather than
+perturbing pixels, they encode a signal in the initial noise latent from which the
+image is generated, which makes the mark a property of the generative trajectory
+rather than of the final pixel array. Tree-Ring~\cite{wen2023treering} is the
+canonical instance, and it is robust to the compression, cropping and blurring that
+defeat pixel-domain marks.
+
+Robustness, however, is not the only property a provenance mechanism needs.
+A watermark that survives every distortion is still worthless as evidence of origin
+if an adversary can \emph{manufacture} it. M\"uller et al.~\cite{muller2025semantic}
+demonstrated exactly this against Tree-Ring and Gaussian Shading: because the
+ring pattern survives DDIM inversion carried out in a \emph{different} diffusion
+model, an attacker who possesses a single watermarked reference image can invert it
+in their own proxy model and regenerate arbitrary new images that the genuine
+detector accepts. No key, no gradients, and no privileged access to the target model
+are required. The attack, called Reprompt, runs in well under a minute.
+
+This paper reports an independent reproduction of that attack. Our motivation is
+not to doubt the original result --- it reproduces --- but to establish a verified
+baseline on hardware we control, as the foundation for subsequent work on how much
+evidential weight a watermark detection can carry. Reproduction is the appropriate
+first step, and it is a step that the security community has repeatedly found to be
+harder than it appears: a recent longitudinal study of roughly 750 machine-learning
+security papers found that most ship no code, and that a majority of the artifacts
+that do exist fail to run~\cite{olszewski2023reproducibility}.
+
+Our constraint is compute. The original evaluation used an NVIDIA~A40 with 45\,GB
+of memory; we had access only to a free-tier notebook service providing two
+NVIDIA~T4 accelerators of 14.6\,GB usable memory each. The models do not fit at the
+precision the released code assumes. Working within that limit produced most of what
+we report here, because it forced us to instrument parts of the pipeline that a
+sufficiently large machine would have let us leave alone.
+
+\vspace{2pt}
+\noindent\textbf{Contributions.}
+\begin{itemize}\itemsep2pt
+  \item A verified reproduction of the Reprompt forgery attack against Tree-Ring on
+        SDXL under a fully pinned software and provenance configuration, with
+        genuine, clean and forged detections all falling inside the originally
+        reported distributions (Section~\ref{sec:eval}).
+  \item Recovery of the detector's discarded non-central $\chi^2$ statistic,
+        validated against the released detector to below $10^{-12}$, together with
+        the finding that two natural scores derived from that statistic yield
+        materially different separation on identical samples
+        (Section~\ref{sec:instr}).
+  \item A localisation of half-precision failure to the variational autoencoder
+        rather than the denoising network, permitting a fix confined to a single
+        component (Section~\ref{sec:env}).
+  \item A four-gate feasibility protocol --- memory, cost, statistic
+        recoverability, hypothesis separation --- reported with its measured
+        outcomes, including one assumption that our measurements refuted
+        (Sections~\ref{sec:eval} and~\ref{sec:disc}).
+\end{itemize}
+
+\section{Background and Related Work}
+
+\subsection{Semantic watermarking}
+
+A latent diffusion model~\cite{rombach2022ldm} generates an image by iteratively
+denoising an initial Gaussian latent $z_T$. Tree-Ring~\cite{wen2023treering}
+watermarks the model by replacing part of $z_T$ with a fixed, key-derived pattern in
+the Fourier domain: a set of concentric rings placed in one channel of the shifted
+spectrum. Because the pattern is imposed before generation rather than after, it is
+carried through the whole sampling trajectory and is not localised in any region of
+the output image.
+
+Detection reverses the process. Given a candidate image, the detector runs the
+sampler backwards --- DDIM inversion~\cite{song2021ddim} --- to obtain an estimate
+$\hat{z}_T$ of the latent the image would have been generated from, applies the
+same mask in frequency space, and tests the recovered coefficients against the key
+pattern. Writing $f$ for the recovered masked coefficients, $t$ for the key pattern
+and $\sigma$ for the standard deviation of $f$, the released implementation computes
+%
+\begin{equation}
+\xstat = \sum_i \left( \frac{f_i - t_i}{\sigma} \right)^{\!2},
+\qquad
+\lam = \sum_i \frac{t_i^{2}}{\sigma^{2}},
+\label{eq:trstat}
+\end{equation}
+%
+and reports $p = F_{\chi'^2}(\xstat;\, \mathrm{df},\, \lam)$, the non-central $\chi^2$
+CDF. A detection is declared when $p < \tau$ for a model-specific threshold; for
+SDXL~\cite{podell2024sdxl} at a $1\%$ false-positive rate,
+$\tau = 0.0261$. Note that detection operates on an \emph{estimate} of $z_T$: DDIM
+inversion is only approximately invertible, so every detection is already one
+inference removed from the quantity the scheme actually embeds.
+
+\subsection{Removal versus forgery}
+
+Most attack literature targets removal --- destroying the mark while preserving the
+image. Zhao et al.\ showed that adding noise in latent space and regenerating removes
+many watermarks, though they noted semantic schemes such as Tree-Ring resisted this
+better than pixel-space schemes. The WAVES benchmark~\cite{an2024waves} systematised
+this into a stress-test suite spanning distortion, regeneration and adversarial
+attacks, and reported Tree-Ring to be particularly vulnerable to adversarial
+embedding and surrogate-detector attacks while remaining relatively robust to plain
+distortions.
+
+Forgery is the opposite direction and, for provenance, the more damaging one.
+Removal produces false negatives: a genuine image is no longer recognised. Forgery
+produces false positives: an image that was never generated by the marked model is
+attributed to it. A provenance claim rests entirely on the second error rate, and
+robustness results say nothing about it.
+
+\subsection{The Reprompt attack}
+
+M\"uller et al.~\cite{muller2025semantic} show that the ring pattern survives DDIM
+inversion performed in a model other than the one that generated the image. The
+attacker holds one watermarked reference $x^{(w)}$, inverts it in a proxy model
+$u_A$ to obtain $\hat{z}_T^{(w)}$, and then generates a new image from that latent
+under a prompt of their choosing. The output is semantically unrelated to the
+reference and yet is accepted by the genuine detector.
+
+The same work introduces Imprint, an optimisation-based variant that learns a
+perturbation to a cover image's latent so that its inversion matches a target
+watermarked latent. Imprint offers finer control at roughly two orders of magnitude
+greater cost per run. We reproduce Reprompt only; Section~\ref{sec:limits} states
+why.
+
+A subsequent line of work has pursued cheaper forgery, including optimisation-free
+forgery via regenerative diffusion~\cite{optfree2025forgery}, and mixup-style
+averaging attacks described in the MetaSeal analysis~\cite{metaseal2025}, which
+estimate an additive watermark signal from many reference images. The latter is
+poorly matched to noise-space schemes and is reported to fail outright against
+Gaussian Shading~\cite{yang2024gaussianshading}.
+
+\subsection{Reproduction as a research activity}
+
+Independent reproduction is an established genre in security and machine learning.
+Olszewski et al.~\cite{olszewski2023reproducibility} measured its current state
+across a decade of Tier-1 security venues and found artifact availability and
+executability both poor, and unchanged by the introduction of artifact evaluation
+committees. Reproductions that diverge from the original are themselves informative:
+Hwang et al.~\cite{hwang2024invisible}, reproducing Tree-Ring in the removal
+direction, matched the original's unattacked performance closely but obtained an AUC
+of $0.463$ under rotation against the original's $0.935$, and traced the gap to the
+fact that rotation in pixel space does not correspond to rotation in the latent
+space --- confirming the effect across watermark channel placements, model versions,
+and schedulers. We adopt a similar posture: measured divergence is reported as a
+result, not smoothed away.
+
+\section{Reproduction Setup}
+\label{sec:setup}
+
+\subsection{Hardware}
+
+Table~\ref{tab:hw} states the gap between the original evaluation environment and
+ours. It is the origin of most of Section~\ref{sec:env}.
+
+\begin{table}[t]
+\centering\small
+\caption{Original and reproduction environments.}
+\label{tab:hw}
+\begin{tabular}{lll}
+\toprule
+ & M\"uller et al. & This work \\
+\midrule
+GPU         & A40, 45\,GB     & T4 $\times 2$, 14.6\,GB ea. \\
+Precision   & fp32            & fp16 target / fp32 attacker \\
+Target      & SDXL            & SDXL \\
+Attacker    & SD 2.1          & SD 2.1 \\
+Resolution  & 512             & 512 \\
+Scheduler   & DDIM            & DDIM \\
+Allocation  & dedicated       & 30 GPU-h / week, shared \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The notebook service offers two accelerator types. The P100 reports compute
+capability \code{sm\_60}, which the installed PyTorch~2.10 build no longer supports;
+it is unusable irrespective of its memory, leaving the dual-T4 configuration as the
+only option. Neither T4 supports \code{bfloat16}, which places FLUX.1-dev --- one of
+the target models the released code supports --- out of reach. We record this as a
+hardware exclusion carrying no implication about the scheme's behaviour on that
+model.
+
+Storage is tiered and the tiers have different lifetimes: model weights are written
+to an ephemeral overlay volume of approximately 1\,TB, and experimental outputs to a
+20\,GB persistent volume. Section~\ref{sec:env} reports a failure caused by treating
+the two as interchangeable.
+
+\subsection{Models and configuration}
+
+The target is Stable Diffusion~XL base~1.0 with a DDIM scheduler; the attacker proxy
+is Stable Diffusion~2.1 base. The original SD~2.1 repository was withdrawn by its
+publisher during our work, and we substitute a mirror of the same weights. All
+generation and inversion runs at $512 \times 512$ with $50$ sampling steps and
+guidance scale $7.5$, at seed $123$. The Tree-Ring configuration follows the released
+defaults: ring pattern, circular mask, radius~$10$, channel~$3$, complex injection,
+\code{l1\_complex} measurement, giving $\mathrm{df} = 634$. The SDXL detection
+threshold is $\tau = 0.0261008646426459$, taken from the original work's calibration
+at a $1\%$ false-positive rate. The recorded session ran PyTorch~2.10.0+cu128,
+CUDA~12.8, \code{transformers}~4.46.3 and \code{diffusers}~0.31.0 on Python~3.12.13.
+
+\subsection{Provenance}
+
+All modifications are committed to a fork of the released repository and pinned by
+commit hash. This is a deliberate choice over runtime patching, for two reasons.
+Runtime monkey-patching is invisible to any component the notebook invokes as a
+subprocess, so a patched detector in the parent process does not apply to an attack
+script launched by it. And a modified working tree will satisfy a commit-hash check
+while executing code that is not in the recorded commit. We therefore reset hard to
+the pinned SHA, clean untracked files, and assert a clean tree before every run.
+
+Concretely, the notebook issues \code{git reset --hard} to the pinned SHA followed
+by \code{git clean -fd}, then re-reads \code{HEAD} and asserts both that it equals
+the recorded commit and that \code{git status --porcelain} is empty. A checkout
+alone would leave local modifications in place and still satisfy the hash comparison.
+
+Session metadata --- commit hashes for both our fork and the upstream base, model
+identifiers, dtypes, device assignment, library versions, and the SHA-256 of the
+resolved dependency lock --- is serialised to disk at the start of every run and is
+released with the artifacts.
+
+\subsection{Gates}
+
+We treat the reproduction as a sequence of feasibility gates rather than as an
+experiment. Each answers a question that, if answered badly, would make subsequent
+work meaningless, and none is intended to produce a finding about watermarking:
+
+\begin{itemize}\itemsep2pt
+\item[\textbf{G1}] Do both pipelines fit in 14.6\,GB?
+\item[\textbf{G2}] What is the wall-clock cost of one attack on a T4?
+\item[\textbf{G3}] Is the detector's underlying statistic recoverable, and does it
+      carry usable dynamic range?
+\item[\textbf{G4}] Do genuine, clean and forged observations separate?
+\end{itemize}
+
+\section{Environment Reconstruction}
+\label{sec:env}
+
+This section reports four findings about executing the released artifact in an
+environment other than the one it was developed in. We state them as findings rather
+than as narrative because each generalises beyond this particular repository.
+
+\subsection{Package removal is not idempotent in layered images}
+
+The notebook image ships PyTorch~2.10 and \code{transformers}~v5; the released code
+requires the late-2024 stack. Installing the repository's pinned requirements over
+the image produces a tree in which v5 and v4 files coexist, because \code{pip} cannot
+fully remove distributions baked into a lower image layer. Every entry point then
+fails at import with \code{ModuleNotFoundError} naming a module the codebase never
+references --- an error that misdirects diagnosis, since it describes an internal
+module of a package rather than a missing dependency.
+
+Recovery requires uninstalling, removing the package directories from
+\code{site-packages} directly, installing five exact pins
+(\code{transformers}~4.46.3, \code{tokenizers}~0.20.3, \code{diffusers}~0.31.0,
+\code{huggingface\_hub}~0.26.2, \code{accelerate}~1.1.1), and restarting the
+interpreter. The restart is not optional: the partially-imported broken modules
+remain cached in \code{sys.modules} and survive reinstallation.
+
+A second dependency is easy to miss. \code{lpips} appears in the repository's
+requirements file but not among the version-critical pins, and without it every
+entry point fails inside the image-utility module before any model is loaded.
+
+\subsection{Cache paths are frozen at import}
+
+The Hugging Face hub library resolves its cache location when it is first imported.
+Setting \code{HF\_HOME} after any transitive import therefore has no effect, and
+model weights are written to the default location --- in our case the 20\,GB
+persistent volume, which they exhaust. The environment variable must be set in the
+first executed cell, above every import in the session. We direct weights to the
+ephemeral high-capacity volume and reserve the persistent volume for experimental
+outputs.
+
+\subsection{Guards must interrogate state, not sentinel files}
+
+Our first implementation of the dependency-pinning cell wrote a lock file to the
+persistent volume on success and skipped reinstallation whenever that file existed.
+The two objects have different lifetimes: the persistent volume survives across
+sessions, while installed packages do not. A stale lock file consequently caused the
+pinning step to be skipped in an environment that no longer had the pins, and the
+session proceeded silently with the platform's stock \code{diffusers}. The failure is
+silent by construction --- the guard reports success --- and was detected only by
+inspecting library versions in the session metadata.
+
+The corrected guard calls \code{importlib.metadata.version} on each pinned
+distribution and compares it against the required version, treating a
+\code{PackageNotFoundError} as failure. The general principle is that a guard must
+interrogate the state it claims to protect; a marker stored on a medium with
+different lifetime semantics than the guarded state will eventually report the wrong
+answer.
+
+
+\subsection{A half-precision failure that did not localise}
+\label{sec:fp16}
+
+The released code sets \code{DTYPE = torch.float32} at module level in its pipeline
+provider and contains no half-precision path anywhere. Since SDXL at full precision
+leaves no room for the attacker model on the same card, we introduced fp16 on the
+target. An attack launched through the repository's command-line entry point then
+reported a \code{NaN} $p$-value while its image-quality metrics remained
+well-formed, indicating that generation was intact and only the detection path had
+broken.
+
+Detection inversion is two stages: a VAE encode from image to latent, followed by the
+U-Net DDIM loop from latent to $\hat{z}_T$. We built a probe that runs each stage
+under both dtypes against a single fixed generated image, so that the autoencoder
+dtype is the only variable, expecting to localise the overflow to one of the two.
+
+The probe did not reproduce the failure. Neither stage produced non-finite values
+under either dtype, and both configurations returned bit-identical detection
+$p$-values of $1.6648 \times 10^{-36}$. The most likely explanation is that SDXL's
+autoencoder carries \code{force\_upcast = True} in its configuration, so the library
+promotes it to full precision internally regardless of the dtype the caller requests
+--- which would make our \code{.to(torch.float16)} call on the VAE a no-op and
+explain the identical outputs. We did not confirm this by instrumenting the library
+itself, and we therefore report the negative result rather than the mechanism.
+
+Two things follow. Empirically, mixed precision is safe for detection on this
+configuration: the fp16 target produces the same detection statistic as the fp32
+target, so the memory saving in Table~\ref{tab:g1} is obtained at no measured cost
+to the measurement. Methodologically, the \code{NaN} we originally observed arose in
+the subprocess path and not in the in-process path, and the two differ in more than
+dtype. Attributing it to the autoencoder --- which we had done, on the strength of
+the sane image metrics --- was an inference the probe was built to test and failed
+to support. Section~\ref{sec:disc} treats this alongside a second prediction that
+did not survive measurement.
+
+We retain fp32 on the attacker model, which requires numerical headroom through a
+$50$-step inversion chain and, at $5.57$\,GB, does not benefit materially from
+reduced precision.
+
+\section{Detector Instrumentation}
+\label{sec:instr}
+
+\subsection{The detector discards its own statistic}
+
+The released Tree-Ring detector computes $\sigma$, $\lam$ and $\xstat$ exactly as in
+Equation~\ref{eq:trstat}, evaluates the non-central $\chi^2$ CDF, and returns only
+the resulting $p$-value; the accuracy accessor returns $1 - p$. The intermediate
+quantities are computed and then discarded.
+
+This is a reasonable interface for a detector whose purpose is to accept or reject.
+It is limiting for any consumer that needs to compare evidence \emph{strengths}
+rather than outcomes, for three reasons. A CDF value is a tail probability, so the
+entire range of strong evidence is compressed into a narrow band adjacent to zero,
+where floating-point resolution is the binding constraint rather than the underlying
+measurement. The accuracy accessor saturates at $1.0$ and discards more information
+still. And the transformation is not order-preserving in any useful metric sense:
+differences in $p$ do not correspond to comparable differences in how well the
+recovered spectrum matches the key.
+
+We therefore reimplement Equation~\ref{eq:trstat} so that $\xstat$, $\lam$,
+$\mathrm{df}$ and $\sigma$ are all retained (Listing~\ref{lst:rawstat}). The
+computation is identical to the detector's; only the return value differs.
+
+\begin{lstlisting}[caption={Recovering the discarded statistic. The computation
+mirrors the released detector; the intermediates are preserved rather than
+returned only as a CDF.},label=lst:rawstat]
+def raw_tr_stat(wm, latents):
+    lat_fft = torch.fft.fftshift(
+        torch.fft.fft2(latents), dim=(-1, -2))
+    mask, gt = wm.watermarking_mask[0], wm.gt_patch[0]
+    out = []
+    for one in lat_fft:
+        f = one[mask].flatten(); t = gt[mask].flatten()
+        f = torch.concatenate([f.real, f.imag])
+        t = torch.concatenate([t.real, t.imag])
+        sigma = f.std()
+        lambd = (t ** 2 / sigma ** 2).sum().item()
+        x     = (((f - t) / sigma) ** 2).sum().item()
+        out.append({"x": x, "lambd": lambd, "df": len(t),
+                    "sigma": sigma.item(),
+                    "p_value": scipy.stats.ncx2.cdf(
+                        x=x, df=len(t), nc=lambd)})
+    return out
+\end{lstlisting}
+
+\subsection{Validating the reimplementation}
+
+A reimplemented statistic is usable only if it agrees with the one the detector
+actually applies. On every observation we push our recovered $\xstat$ back through
+the same CDF and compare against the value the released detector returns for the same
+latent, asserting agreement below $10^{-12}$.
+
+
+The assertion held on all $18$ observations, at a maximum absolute
+difference of exactly $0$: our reimplementation is bitwise identical to the released
+detector's computation, not an approximation of it. This matters because it removes
+reimplementation error as an explanation for anything reported in
+Section~\ref{sec:eval}.
+
+\subsection{The choice of score is a modelling decision}
+\label{sec:score}
+
+Two scores follow naturally from Equation~\ref{eq:trstat}. The raw discrepancy
+$-\xstat$ is the simplest, with lower $\xstat$ indicating a closer match to the key.
+The centred form $\lam - \xstat$ standardises by the non-centrality parameter, which
+matters if $\mathrm{df}$ or $\sigma$ vary across conditions.
+
+These are not notational variants of each other. Over our runs $\sigma$ ranges from
+$31.75$ to $42.59$ and $\lam$ from $856.6$ to $1541.4$, so the two scores are not
+monotonically related across observations. On identical samples the forged arm
+separates from the clean null with AUC $0.861$ under $-\xstat$ and $0.972$ under
+$\lam - \xstat$; the genuine arm attains $1.000$ under both. A difference of that
+magnitude on the forged arm, arising purely from a choice of transformation, means
+the score must be treated as a pre-registered modelling decision rather than a
+presentational one --- selecting between candidate scores after observing separation
+on the same samples used to report it is selection on the test set. We report both
+throughout and designate neither as canonical.
+
+\subsection{Measurement harness}
+
+The released attack script writes only the censored $p$-value to its metrics output,
+so the measurement runs do not invoke it. We assemble the attack from the
+repository's own primitives --- inversion, generation, and detection are all the
+original implementations, unmodified --- and add a third arm the script does not
+produce. Each trial yields three observations against a common watermark instance:
+
+\begin{itemize}\itemsep2pt
+\item \textbf{genuine} --- a watermarked latent generated in the target model and
+      inverted back;
+\item \textbf{clean} --- the same prompt generated from ordinary Gaussian noise,
+      providing an empirical null against which both other arms are measured;
+\item \textbf{forged} --- the genuine image inverted in the \emph{attacker} model,
+      regenerated there under an unrelated prompt, and returned to the target
+      detector.
+\end{itemize}
+
+The clean arm is the addition that matters. Without an empirical null there is no
+basis for stating what a given score is evidence \emph{for}, only whether it crosses
+a threshold.
+
+Algorithm~\ref{alg:trial} states one trial. The two models are held on separate
+devices and swapped to host memory around each other's turn, so that peak allocation
+tracks the larger of the two rather than their sum.
+
+\begin{algorithm}[t]
+\small
+\caption{One measurement trial. $u_T$ is the target model, $u_A$ the attacker proxy,
+$\mathcal{I}$ inversion, $\mathcal{G}$ generation, $\mathcal{D}$ the Tree-Ring
+detector, and $k$ the watermark key. The prompts $q_T$ and $q_A$ are unrelated.}
+\label{alg:trial}
+\begin{algorithmic}[1]
+\State $z_T^{(w)} \gets \textsc{Watermark}(k)$ \Comment{key-derived latent}
+\State $x^{(g)} \gets \mathcal{G}(u_T, q_T, z_T^{(w)})$ \Comment{genuine}
+\State $x^{(c)} \gets \mathcal{G}(u_T, q_T, \varepsilon),\;
+        \varepsilon \sim \mathcal{N}(0, I)$ \Comment{clean null}
+\State $\hat{z}^{(w)} \gets \mathcal{I}(u_A, x^{(g)})$
+        \Comment{invert in \emph{attacker} model}
+\State $x^{(f)} \gets \mathcal{G}(u_A, q_A, \hat{z}^{(w)})$ \Comment{forged}
+\For{$x \in \{x^{(g)}, x^{(c)}, x^{(f)}\}$}
+  \State $\hat{z} \gets \mathcal{I}(u_T, x)$
+  \State record $(\xstat, \lam, \mathrm{df}, \sigma, p)
+         \gets \mathcal{D}(\hat{z}, k)$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+Line~4 is the entire vulnerability: the ring pattern survives inversion through a
+model that never held the key, so line~5 regenerates an unrelated image from a latent
+that still carries it.
+
+We state the boundary explicitly. The attack concept, the DDIM inversion, the
+Tree-Ring detector, the diffusion models and the prompt sets are the original
+authors'. The loop assembly, the clean null arm, the recovery of the discarded
+statistic and its validation are ours.
+
+\section{Evaluation}
+\label{sec:eval}
+
+All results are from six trials of three arms, $n = 18$ observations, at seed $123$.
+
+\subsection{G1 --- memory feasibility}
+
+\begin{table}[t]
+\centering\small
+\caption{Peak allocated memory, measured with
+\code{max\_memory\_allocated} after a single generation. Card capacity is 14.6\,GB.}
+\label{tab:g1}
+\begin{tabular}{lrr}
+\toprule
+Configuration & Peak (GB) & Load (s) \\
+\midrule
+SD 2.1 attacker, fp32 & 5.57  & 27.6 \\
+SDXL target, fp16     & 7.36  & 73.6 \\
+SDXL target, fp32     & 13.68 & 59.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:g1} gives the measured peaks. At full precision the pair requires
+$19.25$\,GB against $14.6$\,GB available and cannot co-reside. Half precision on the
+target reduces its peak by $6.32$\,GB, bringing the pair to $12.93$\,GB --- within a
+single card's capacity, with headroom.
+
+Co-residency is in fact achievable even at full precision, because the repository's
+pipeline provider swaps an idle model to host memory: peak allocation tracks
+$\max(\cdot)$ over the two models rather than their sum. Half precision is therefore
+not strictly required, but it removes the swap from the inner loop of every trial.
+\textbf{G1 passes.}
+
+\subsection{G2 --- wall-clock cost}
+
+A single Reprompt run completes in $338.3$\,s on a T4 against the approximately
+$30$\,s the original work reports on an A40 --- a factor of $11.3$. The gap is
+consistent with the difference in memory bandwidth and tensor-core generation, and it
+is not prohibitive: the attack remains a sub-six-minute operation on hardware
+available at no cost, which is the property that matters for a threat model.
+\textbf{G2 passes.}
+
+\subsection{G3 --- statistic recoverability and range}
+
+All $18$ observations produced distinct values of $\xstat$, spanning $889.1$ to
+$1802.2$ against $\mathrm{df} = 634$. The cross-check against the released detector
+returned a maximum absolute difference of exactly $0$. The statistic is recoverable
+and carries dynamic range. \textbf{G3 passes.}
+
+The $p$-value did not behave as we had predicted. We had inferred from reading the
+detector source that \code{scipy.stats.ncx2.cdf} would underflow to exactly $0.0$ on
+strong genuine detections, left-censoring the genuine distribution and making
+$-\log_{10} p$ undefined --- and we had used that inference to justify recovering
+$\xstat$ at all. Measured: $p$ was exactly zero in $0$ of $18$ observations, with
+$18$ distinct values and a smallest non-zero value of $5.45 \times 10^{-49}$. The
+prediction did not reproduce. The case for recovering the raw statistic survives on
+the grounds given in Section~\ref{sec:score} --- dynamic range and score
+comparability --- but not on the grounds we originally gave.
+
+\subsection{G4 --- hypothesis separation}
+
+\begin{table}[t]
+\centering\small
+\caption{Per-arm outcomes ($n = 6$ each) against the values M\"uller et al.\ report
+for the same model pairing. Mean $p$ is dominated by the largest observation; medians
+are given for the genuine and forged arms, whose distributions span many orders of
+magnitude.}
+\label{tab:arms}
+\begin{tabular}{lrrrr}
+\toprule
+Arm & $\bar{\xstat}$ & $\overline{\lam - \xstat}$ & det. & orig.\ det. \\
+\midrule
+genuine & $1096.5$ & $+220.0$ & $6/6$ & $1.00$ \\
+clean   & $1623.9$ & $-626.3$ & $0/6$ & $0.01$ \\
+forged  & $1391.2$ & $-371.3$ & $5/6$ & $0.97$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\caption{Detection $p$-values against the original work's reported means.}
+\label{tab:pvals}
+\begin{tabular}{lrrr}
+\toprule
+Arm & median $p$ & mean $p$ & orig.\ mean $p$ \\
+\midrule
+genuine & $8.63 \times 10^{-38}$ & $7.96 \times 10^{-24}$ & $1.10 \times 10^{-21}$ \\
+clean   & $4.56 \times 10^{-1}$  & $4.80 \times 10^{-1}$  & $4.72 \times 10^{-1}$ \\
+forged  & $2.30 \times 10^{-5}$  & $1.50 \times 10^{-2}$  & $5.20 \times 10^{-3}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The attack reproduces.} Tables~\ref{tab:arms} and~\ref{tab:pvals} place
+our measurements against the original work's reported values. The clean arm matches
+closely --- mean $p$ of $0.480$ against $0.472$, and no false positives in six trials
+against a reported rate of $0.01$ --- which is the arm that most directly validates
+the detector as configured. The genuine arm is detected in every trial. The forged
+arm crosses the $\tau = 0.0261$ threshold in five of six trials, with a median $p$
+of $2.30 \times 10^{-5}$, three orders of magnitude below the threshold. A single
+Reprompt run through the repository's own entry point likewise produced a genuine
+$p$ of $3.53 \times 10^{-33}$ and a forged $p$ of $3.13 \times 10^{-6}$, both
+detected.
+
+\paragraph{Separation.} Against the clean null, the genuine arm separates perfectly
+(AUC $1.000$ on both scores). The forged arm separates at AUC $0.861$ on $-\xstat$
+and $0.972$ on $\lam - \xstat$ (Section~\ref{sec:score}). \textbf{G4 passes.}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/gate4_separation.png}
+\caption{Left: distribution of the evidence score $-\xstat$ by arm. Right: per-trial
+values of $\xstat$. The forged arm occupies an intermediate band that overlaps the
+clean null at its upper edge.}
+\label{fig:sep}
+\end{figure}
+
+\paragraph{A divergence worth naming.} Our forged detection rate of $5/6 = 0.83$ sits
+below the $0.97$ reported originally. At $n = 6$ this is not a statistically
+meaningful difference --- a $95\%$ Wilson interval on $5/6$ spans roughly $0.44$ to
+$0.97$ --- and we do not claim the attack is weaker than reported. But the shape of
+the failure is informative. Figure~\ref{fig:sep} shows the forged arm occupying a
+band between the clean null and the genuine arm, and the single undetected forgery
+has $\xstat = 1558.3$, inside the clean range of $1483.7$ to $1802.2$. The forgery
+did not fail marginally; it produced a statistic indistinguishable from an
+unwatermarked image.
+
+This is the substantive observation of the section. A detector operating as a binary
+test reports the five successful forgeries and the six genuine images identically,
+while the intermediate position of the forged distribution --- clearly visible in the
+raw statistic and entirely absent from the thresholded decision --- is exactly the
+information that would distinguish them. The detector computes that information and
+discards it.
+
+\section{Discussion}
+\label{sec:disc}
+
+\subsection{Where reproduction effort goes}
+
+Invoking the released attack is a single line of code. Our reproduction notebook is
+$375$ lines. Table~\ref{tab:effort} shows the distribution, and the ratio is worth
+stating plainly: the published artifact is not the expensive part of reproducing a
+published artifact.
+
+\begin{table}[t]
+\centering\small
+\caption{Distribution of reproduction code by purpose.}
+\label{tab:effort}
+\begin{tabular}{lrl}
+\toprule
+Component & Lines & Category \\
+\midrule
+Environment repair, provenance & 132 & portability \\
+Memory measurement (G1)        & 36  & instrumentation \\
+Invoking the released attack   & 1   & original artifact \\
+Timing wrapper (G2)            & 22  & instrumentation \\
+Precision localisation         & 49  & portability \\
+Statistic recovery and harness & 71  & extension \\
+Analysis and gate verdicts     & 64  & extension \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This is not a criticism of the artifact, which ran and produced results consistent
+with its paper. It is an observation about what artifact evaluation measures.
+Executability is verified in the environment the authors specify; portability across
+hardware generations, driver stacks and library versions is a distinct property, and
+it is the one that determines whether the work can be built upon a year later on
+different hardware. Roughly $45\%$ of our code exists solely to establish an
+environment in which the remaining $55\%$ can run.
+
+\subsection{Detector interfaces determine what can be asked}
+
+The finding we consider most transferable is that the detector's return type
+constrains the questions downstream work can pose. Returning a thresholded decision
+or a CDF value is sufficient for deployment and insufficient for analysis. Our entire
+instrumentation effort exists to undo one line of the released detector --- the
+decision to return $p$ rather than the tuple $(\xstat, \lam, \mathrm{df}, \sigma)$
+from which $p$ is computed.
+
+The cost of exposing those quantities is negligible; they are already computed. The
+cost of not exposing them, for a downstream consumer, is a reimplementation that must
+then be validated against the original. We suggest that detectors intended for
+research use return their sufficient statistics alongside any derived decision. This
+is an argument about interface design, not about the correctness of the scheme or the
+admissibility of any particular evidence.
+
+\subsection{Two predictions that did not survive measurement}
+
+We reported two inferences drawn from source inspection that our own measurements
+contradicted, and we state them together because they share a mechanism.
+
+The first was that the detector's $p$-value is left-censored at zero. The reasoning
+was not unreasonable: the CDF of a non-central $\chi^2$ evaluated far into its lower
+tail is a plausible underflow candidate, and the released code prints $p$-values as
+\code{0.0} in its console output, which we took as corroboration. Both the reasoning
+and the apparent corroboration were wrong. The printed zeros were a display-precision
+artifact; the underlying values were finite and distinct across all eighteen
+observations, down to $5.45 \times 10^{-49}$.
+
+The second was that half-precision detection failure localises to the autoencoder
+(Section~\ref{sec:fp16}). The probe we built to confirm it returned bit-identical
+$p$-values under both dtypes and no non-finite values in either stage. The failure we
+had observed came from a different execution path, and the attribution was
+unsupported.
+
+A third, smaller correction: we initially attributed a PSNR calculation fix to commit
+\code{43eec7e}, which modifies documentation only. The fix is \code{d5885a3}.
+
+What the three share is that each was inferred from reading rather than from running,
+and that in two of the three cases an artifact of \emph{presentation} --- console
+formatting, sane-looking quality metrics --- was mistaken for evidence about
+underlying values. We report them because the same inferential shortcut is available
+at every point in a reproduction, and because a study that reports only the
+predictions that held has not demonstrated that it was capable of detecting one that
+did not.
+
+\subsection{Implications for the attack}
+
+Our reproduction supports the original conclusion. Forgery succeeded in five of six
+trials on the first configuration we tried, at $338.3$\,s per attempt on free
+hardware, using a proxy model that shares no weights with the target. The attacker
+requirement is a single watermarked reference image, and the median forged $p$-value
+sits three orders of magnitude below the calibrated detection threshold.
+
+The property this exploits is specific rather than general. Tree-Ring detection is a
+similarity test against a recoverable artifact, and the secret used to verify is
+identical to the secret used to inject. Any scheme with both properties admits the
+same attack shape, and the transferability of the pattern across models means the
+attacker need not possess the target model at all. This is not a general law relating
+robustness to forgeability --- schemes that verify with a secret distinct from the one
+they inject with are not implicated --- but it does mean that robustness evaluations
+of this family of schemes measure a property that is orthogonal to the one a
+provenance claim depends on.
+
+\section{Limitations}
+\label{sec:limits}
+
+We state these plainly; several materially constrain what our numbers support.
+
+\textbf{A single watermark key.} All observations share one Tree-Ring seed
+($\code{w\_seed} = 999999$). The variation we report is therefore within-key. These
+are not independent draws over the key space, and the separation in
+Section~\ref{sec:eval} must not be read as a distribution over watermarks. This is
+the most serious limitation of the present study, and it is the first thing corrected
+in subsequent work.
+
+\textbf{Sample size.} Eighteen observations from six trials, six per arm. This is
+sufficient to establish that the attack reproduces and that the statistic is
+recoverable; it is insufficient for any distributional claim. The AUC values in
+Section~\ref{sec:eval} should be read as ordering indicators rather than calibrated
+estimates, and the gap between our forged detection rate of $5/6$ and the reported
+$0.97$ is not resolvable at this sample size.
+
+\textbf{Attack scope.} We reproduce Reprompt only. The optimisation-based Imprint
+variant costs roughly two orders of magnitude more per run in the original authors'
+own reporting, which places a replication with meaningful sample size outside our
+compute allocation. We make no claim about Imprint's behaviour on our hardware.
+
+\textbf{Precision divergence.} The original results are fp32 throughout; ours are
+mixed precision. Our probe found fp16 and fp32 detection to be bit-identical on the
+target (Section~\ref{sec:fp16}), but on a single image and most likely because the
+library upcast the autoencoder irrespective of our request. We have not established
+that fp16 is numerically neutral for the detection statistic in general.
+
+\textbf{Excluded target models.} FLUX.1-dev requires \code{bfloat16}, unavailable on
+the T4. PixArt-$\Sigma$ is supported by the released code but runs a DPM scheduler
+rather than DDIM, and the original work's own ablation shows the scheduler
+substantially affects latent recovery quality --- so an SDXL/PixArt comparison would
+confound architecture with scheduler. We report neither.
+
+\textbf{Pristine images only.} All observations are of unprocessed images. Realistic
+handling --- recompression, resizing, cropping, screenshotting --- is untested here,
+and both genuine and forged populations would need to pass through matched channels
+before any conclusion about behaviour under such handling could be drawn.
+
+\textbf{Attacker model substitution.} The original SD~2.1 repository was withdrawn by
+its publisher during this work and we used a mirror. We verified the weights load and
+produce the expected attack behaviour, but did not perform a bitwise comparison
+against the original release.
+
+\section{Conclusion}
+
+We reproduced the Reprompt semantic watermark forgery attack against Tree-Ring on
+Stable Diffusion~XL, using the authors' released implementation on free-tier hardware
+providing roughly a third of the memory of the original evaluation environment. The
+attack reproduces: genuine images are detected in six of six trials, clean images in
+none, and forged images in five of six, at $338.3$\,s per attempt against the $30$\,s
+reported on datacentre hardware. The clean arm matches the original work's reported
+behaviour closely (mean $p$ of $0.480$ against $0.472$), which is the arm that most
+directly validates the detector as configured.
+
+The result we consider most transferable concerns the detector's interface rather
+than the attack. The released detector computes a non-central $\chi^2$ statistic and
+returns only its CDF. Recovering that statistic --- bitwise identical to the
+detector's own computation --- shows that two natural scores derived from it separate
+the forged arm at AUC $0.861$ and $0.972$ on identical samples, so the choice of
+score is a modelling decision that must be fixed before observing separation. It also
+shows the forged arm occupying an intermediate band between the clean null and the
+genuine arm: information the detector computes, then discards at the point of
+returning a decision.
+
+We also report predictions that failed. We had inferred that the detector's
+$p$-value was left-censored at zero; it was never zero across eighteen observations,
+with a minimum of $5.45 \times 10^{-49}$. We had inferred that half-precision
+detection failure localised to the autoencoder; the probe built to confirm it
+returned bit-identical results under both dtypes. In each case an artifact of
+presentation was mistaken for evidence about underlying values. We report them
+because a reproduction that surfaces only its confirmed predictions has not
+demonstrated that it could detect a failed one.
+
+Immediate future work varies the watermark key across clusters, which is the binding
+limitation of the present study, and passes both genuine and forged populations
+through matched laundering channels so that the distributions being compared have
+undergone identical handling.
+
+\section*{Division of Work}
+
+Saifur Rahman Tamim designed the gate protocol, implemented the environment
+reconstruction and provenance pinning, designed and ran the precision probe, and
+implemented the statistic recovery and its validation. Md Taslimul Hasan Toufique
+\NUM{contribution}. Fahim Ibney Hafiz \NUM{contribution}. A.M. Tayeful Islam advised
+on experimental design and reviewed the manuscript. All authors contributed to the
+analysis and to the writing.
+
+\section*{Availability}
+
+The reproduction notebook, gate artifacts and pinned fork commit are available at
+\NUM{repository URL or ``on request''}.
+
+\balance
+\bibliographystyle{plainnat}
+\bibliography{refs}
+\end{document}
