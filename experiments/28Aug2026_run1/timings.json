@@ -1,0 +1,8 @@
+[
+  {
+    "tag": "reprompt",
+    "seconds": 332.0,
+    "rc": 0,
+    "stdout_tail": "phase 1: generate target image\n(Benign image) detection_success: True, bit accuracy: 0.00000, p_value: 3.5277310716216314e-33\nphase 2: invert using attacker model\nphase 3: generate attacker image\nphase 4: invert using target model and verify watermark\n(Harmful image) detection_success: True, bit accuracy: 0.00000, p_value: 3.1283414038377704e-06\n"
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "n": 18,
+  "x_unique": 18,
+  "x_min": 889.1171264648438,
+  "x_max": 1802.162109375,
+  "p_unique": 18,
+  "p_zero_frac": 0.0,
+  "p_min_nonzero": 5.45067676949305e-49,
+  "crosscheck_max_diff": 0.0,
+  "pass": true
+}
