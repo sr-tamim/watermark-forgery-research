@@ -111,8 +111,8 @@ initial noise latent of a diffusion model. Recent work shows these watermarks ar
 only removable but forgeable: an attacker who never sees the watermarking key can
 still produce images the genuine detector accepts. We reproduce the Reprompt forgery
 attack of M\"uller et al.\ against Tree-Ring on Stable Diffusion~XL, using the
-authors' released code, on free-tier hardware with roughly a third of the memory
-their evaluation used.
+authors' released code, on free-tier dual T4 GPUs with 14.6\,GB of usable memory per device,
+substantially less per-GPU memory than the A40 hardware used in the original study.
 
 The attack reproduces. Over six trials of three arms we detect genuine images $6/6$,
 clean images $0/6$, and forged images $5/6$, at $332.0$\,s per attack. Three further
@@ -133,9 +133,9 @@ released with the paper.
 Text-to-image diffusion models are good enough now that asking whether a picture was
 machine-generated has stopped being an academic question. Watermarking is one
 prominent answer. Among the watermarking families, semantic schemes are notable
-because they do not perturb pixels at all: they encode a signal in the initial noise
-latent the image is generated from, which makes the mark a property of the generative
-trajectory rather than of the final pixel array. Tree-Ring~\cite{wen2023treering} is
+because they add no post-hoc pixel-space perturbation: they encode a signal in the
+initial noise latent the image is generated from, so the mark is a property of the
+generative trajectory rather than something applied to a finished image. Tree-Ring~\cite{wen2023treering} is
 the canonical example, and it survives the compression, cropping and blurring that
 defeat pixel-domain marks.
 
@@ -163,12 +163,12 @@ We set out to reproduce that attack independently. Not because we doubted it, bu
 because we wanted a verified baseline on hardware we control before building anything
 on top of it. Reproduction turns out to be the right first step more often than the
 literature admits: a longitudinal study of roughly 750 machine-learning security
-papers found most ship no code at all, and that a majority of the artifacts which do
-exist fail to run~\cite{olszewski2023reproducibility}.
+papers found that $60\%$ shipped no code, and that $56\%$ of the artifacts which did
+exist would not run~\cite{olszewski2023reproducibility}.
 
-Our constraint was compute. M\"uller et al.\ evaluated on an NVIDIA~A40 with 45\,GB;
-we had a free-tier notebook service offering two NVIDIA~T4 accelerators with 14.6\,GB
-of usable memory each. The released code assumes full precision throughout and has no
+Our constraint was compute. M\"uller et al.\ evaluated on NVIDIA~A40 hardware, distributing their
+experimental campaign over eight such GPUs; we had a free-tier notebook service
+offering two NVIDIA~T4 accelerators with 14.6\,GB of usable memory each. The released code assumes full precision throughout and has no
 half-precision path. Most of what we report below came out of working inside that
 limit, because it forced us to instrument parts of the pipeline that a bigger machine
 would have let us ignore.
@@ -284,8 +284,11 @@ forgeable in the way Tree-Ring is.
 
 Independent reproduction is an established genre. Olszewski et
 al.~\cite{olszewski2023reproducibility} measured its state across a decade of Tier-1
-security venues and found artifact availability and executability both poor, and
-essentially unchanged by the introduction of artifact evaluation committees.
+security venues, finding that $60\%$ of papers shipped no code and that $56\%$ of the
+artifacts which did exist would not run. They further report no statistically
+significant change in artifact \emph{availability} after artifact evaluation
+committees were introduced, while noting that artifacts which passed evaluation
+worked at a higher rate than those that did not.
 
 Reproductions that diverge are informative in their own right. Hwang et
 al.~\cite{hwang2024invisible}, reproducing Tree-Ring on the removal side, matched the
@@ -307,7 +310,7 @@ same posture below: where our measurements diverge, we say so.
 \toprule
  & M\"uller et al. & This work \\
 \midrule
-GPU         & A40, 45\,GB     & T4 $\times 2$, 14.6\,GB ea. \\
+GPU         & A40, 48\,GB nominal & T4 $\times 2$, 14.6\,GB ea. \\
 Precision   & fp32            & fp16 target / fp32 attacker \\
 Target      & SDXL            & SDXL \\
 Attacker    & SD 2.1          & SD 2.1 \\
@@ -370,7 +373,8 @@ python run_reprompting.py \
 \subsection{Provenance}
 
 All our modifications live in a fork of the released
-repository~\cite{semanticforgery-repo}, pinned by commit hash. We chose that over
+repository~\cite{semanticforgery-repo}, pinned by commit hash and listed in the
+Availability section. We chose that over
 runtime patching for two reasons. Monkey-patching in the notebook process is invisible
 to anything launched as a subprocess, so a patched detector in the parent does not
 apply to the attack script it starts. And a dirty working tree satisfies a commit-hash
@@ -541,8 +545,8 @@ Section~\ref{sec:eval}.
 
 Two scores fall out of Equation~\ref{eq:trstat} naturally. The raw discrepancy
 $-\xstat$ is the simpler one: lower $\xstat$ means a closer match to the key. The
-centred form $\lam - \xstat$ standardises by the non-centrality parameter, which
-matters when $\mathrm{df}$ or $\sigma$ move around between observations.
+adjusted form $\lam - \xstat$ offsets the discrepancy by the non-centrality parameter,
+which is itself image-dependent through $\sigma$ and so varies between observations.
 
 They are not the same thing written two ways. Across our runs $\sigma$ spans $31.75$
 to $42.59$ and $\lam$ spans $856.6$ to $1541.4$, so the two scores are not
@@ -633,11 +637,9 @@ matters here: our configuration places the attacker on \code{cuda:0} and the tar
 \textbf{G1 passes.}
 
 Half precision on the target is therefore not required for Reprompt to run on this
-hardware. What it buys is margin. Dropping SDXL from $13.68$ to $7.36$\,GB leaves
-$7.2$\,GB free on the target device, which is the difference between a run that
-completes and one that fails intermittently on allocator fragmentation over six
-sequential trials. It also makes single-card operation comfortable, since the pair
-then sums to $12.93$\,GB.
+hardware. What it buys is headroom: $6.32$\,GB of it, leaving roughly $7.2$\,GB free
+on the target device rather than under $1$\,GB. We adopted it for that margin, not
+out of necessity.
 
 \subsection{G2 --- wall-clock cost}
 
@@ -751,8 +753,8 @@ their value. We are not claiming the attack is weaker than reported.
 The shape of the failure is more interesting than the rate. Figure~\ref{fig:stat}
 shows the forged arm occupying a band between the clean null and the genuine arm, and
 the one forgery the detector missed has $\xstat = 1558.3$, sitting inside the clean
-range of $1483.7$ to $1802.2$. It did not fail narrowly. It produced a statistic
-indistinguishable from an unwatermarked image.
+range of $1483.7$ to $1802.2$. It did not fail narrowly: its $\xstat$ value fell inside the
+observed clean range.
 
 That intermediate band is the observation we would carry forward. A detector working
 as a binary test reports the five successful forgeries and the six genuine images
@@ -801,13 +803,14 @@ The result we would most like to see carried elsewhere concerns the detector's r
 type rather than the attack. Returning a thresholded decision or a CDF value is enough
 for deployment and not enough for analysis. Our whole instrumentation effort exists to
 undo one line of the released detector: the decision to return $p$ instead of the
-tuple $(\xstat, \lam, \mathrm{df}, \sigma)$ that $p$ is computed from.
+intermediate detector quantities $(\xstat, \lam, \mathrm{df}, \sigma)$ that $p$ is
+computed from.
 
 Exposing those quantities costs nothing, since they are already computed. Not exposing
 them costs a downstream consumer a reimplementation that then has to be validated
 against the original, which is exactly the work we did in
-Section~\ref{sec:instr}. Detectors meant for research use should return their
-sufficient statistics alongside whatever decision they make. This is an argument about
+Section~\ref{sec:instr}. Detectors meant for research use should return these
+intermediate quantities alongside whatever decision they make. This is an argument about
 interface design, not about the correctness of the scheme.
 
 \subsection{Predictions that did not survive measurement}
@@ -817,27 +820,24 @@ wrong in the same way.
 
 The first was that the detector's $p$-value is left-censored at zero. The reasoning
 was not silly: a non-central $\chi^2$ CDF evaluated deep into its lower tail is a
-plausible underflow candidate, and the released code prints $p$-values as \code{0.0}
-in its console output, which we read as confirmation. Both halves were wrong. The
-printed zeros were a display-precision artifact and the underlying values were finite
-and distinct all the way down to $5.45 \times 10^{-49}$.
+plausible underflow candidate. Direct measurement disproved it. None of the eighteen
+$p$-values was zero, all eighteen were distinct, and the minimum was
+$5.45 \times 10^{-49}$.
 
-The second concerned half precision. Seeing \code{NaN} detections alongside sane image
-quality metrics, we assumed the failure had to be isolated to the autoencoder. That
-turned out to be right, but we had assumed it before checking, and the probe we built
-to test it ran against a fork that already contained the fix
-(Section~\ref{sec:fp16}). A probe that cannot fail is not a test. We report the
-result as validation of the patch, which is what it is, rather than as a localisation
-of the original fault.
+The second concerned half precision. The targeted autoencoder upcast resolved the
+observed failure, but our controlled probe was run after the patch was already in the
+fork (Section~\ref{sec:fp16}). It therefore validates the patched path rather than
+independently localising the original fault. A probe that cannot fail is not a test,
+and we report the result as the former rather than the latter.
 
 There is a third, smaller correction: we first attributed a PSNR calculation fix to
 commit \code{43eec7e}, which touches documentation only. The fix is \code{d5885a3}.
 
-What links them is that an artifact of \emph{presentation} got mistaken for evidence
-about underlying values, twice: console formatting in the first case, well-formed
-quality metrics in the second. We report them because that shortcut is available at
-every point in a reproduction, and because a study that only surfaces the predictions
-that held has not shown it could catch one that did not. Arp et
+What links them is that in each case we reasoned from what the code appeared to do
+rather than from what it measurably did, and in the second case built the check only
+after the fix. We report them because that shortcut is available at every point in a
+reproduction, and because a study that only surfaces the predictions that held has
+not shown it could catch one that did not. Arp et
 al.~\cite{arp2022dosdonts} catalogue related failure modes in machine-learning
 security research; ours is a variant of their point that assumptions carried into an
 evaluation tend to survive it unexamined.
@@ -852,9 +852,11 @@ magnitude below the calibrated threshold.
 
 The property being exploited is specific rather than general. Tree-Ring detection is a
 similarity test against a recoverable artifact, and the secret used to verify is the
-same secret used to inject. Any scheme with both properties admits this attack shape,
-and the pattern's transferability across models means the attacker never needs the
-target model itself. This is not a general law relating robustness to forgeability.
+same secret used to inject. These two properties help explain why this attack shape applies to Tree-Ring and to
+related inversion-based semantic watermarking schemes, and the pattern's
+transferability across models means the attacker never needs the target model itself.
+We reproduced only Tree-Ring, so we make no claim about schemes we did not test, and
+this is not a general law relating robustness to forgeability.
 Schemes that verify with a secret distinct from the one they inject with are not
 implicated, which is precisely the direction MetaSeal~\cite{zhou2026metaseal} takes
 with content-dependent cryptographic signatures, and which Gunn et
@@ -915,8 +917,8 @@ original release.
 \section{Conclusion}
 
 We reproduced the Reprompt semantic watermark forgery attack against Tree-Ring on
-Stable Diffusion~XL, using the authors' released implementation on free-tier hardware
-with roughly a third of the memory of the original evaluation environment. The attack
+Stable Diffusion~XL, using the authors' released implementation on free-tier dual T4 GPUs with substantially less
+per-GPU memory than the original evaluation environment. The attack
 reproduces: genuine images detected six times out of six, clean images none, forged
 images five out of six, at $332.0$\,s per attempt. The clean arm tracks the original
 work closely at a mean $p$ of $0.480$ against $0.472$, which is the arm that most
@@ -956,8 +958,19 @@ writing.
 
 \section*{Availability}
 
-The reproduction notebook, the gate artifacts and the pinned fork commit are available
-at \NUM{repository URL or ``on request''}.
+Two repositories accompany this work. The reproduction notebook, the gate artifacts
+(\code{gate1.json}, \code{gate3.json}, \code{gate4.json},
+\code{precision\_probe.json}, \code{phase0\_scores.csv},
+\code{phase0\_verdict.json}, \code{session\_meta.json}), the figure-generating
+script and the source of this paper are at\\
+\url{https://github.com/sr-tamim/watermark-forgery-research}.
+
+The modified attack code is a fork of M\"uller et al.'s released
+repository~\cite{semanticforgery-repo}, at\\
+\url{https://github.com/sr-tamim/semantic-forgery}, pinned for all runs reported here
+at commit \code{7f9e7ad}, which branches from upstream \code{ca68950}. Both hashes
+are recorded in \code{session\_meta.json} alongside the SHA-256 of the resolved
+dependency lock, so any run can be traced to the exact code that produced it.
 
 \balance
 \bibliographystyle{plainnat}
