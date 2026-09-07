@@ -23,13 +23,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import stats
-import json, sys
 
 
 def bootstrap_auc(pos, neg, n_boot=5000, seed=42):
     """
-    bootstrap CI for Mann-Whitney AUC (same as rank-biserial).
-    returns (point estimate, lo, hi) for 95% CI.
+    bootstrap CI for the Mann-Whitney AUC = P(pos > neg) + 0.5 * P(tie).
+    returns (point estimate, lo, hi) for a 95% percentile CI.
     """
     rng = np.random.default_rng(seed)
     pos, neg = np.asarray(pos), np.asarray(neg)
@@ -120,8 +119,8 @@ def main():
              ("forged", forged, "clean", clean)]
     for n1, s1, n2, s2 in pairs:
         u, pval = stats.mannwhitneyu(s1["neg_x"], s2["neg_x"], alternative="two-sided")
-        d = cohens_d(s1["x"], s2["x"])
-        pr(f"  {n1} vs {n2}  (raw -x):  U = {u:.1f},  p = {pval:.4e},  d = {d:.3f}")
+        d = cohens_d(s1["neg_x"], s2["neg_x"])
+        pr(f"  {n1} vs {n2}  (-x):  U = {u:.1f},  p = {pval:.4e},  d = {d:.3f}")
     pr()
 
     # --- descriptive stats per arm (mirrors the paper's per-arm table) ---
@@ -162,8 +161,8 @@ def main():
 
 def make_boxplot(df):
     """
-    Box + strip plots of the raw statistic x and adjusted score lambda-x,
-    split by arm. This is Fig 6 in the paper.
+    Box + strip plots of the two candidate scores -x and lambda-x, split by arm.
+    This is Fig 6 in the paper.
     """
     plt.rcParams.update({
         "font.family": "serif", "font.serif": ["DejaVu Serif"],
@@ -179,8 +178,8 @@ def make_boxplot(df):
     fig, axes = plt.subplots(1, 2, figsize=(6.8, 2.6))
 
     for ax, col, label in zip(axes,
-                               ["x", "lambd"],
-                               [r"$x$  (raw statistic)",
+                               ["neg_x", "lam_x"],
+                               [r"$-x$  (raw)",
                                 r"$\lambda - x$  (adjusted)"]):
         data = [df[df.hypothesis == h][col].values for h in ORD]
 

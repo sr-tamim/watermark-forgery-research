@@ -21,9 +21,9 @@ Bootstrap AUC (genuine vs clean), 5000 resamples, 95% CI
 
 Mann-Whitney U tests (two-sided)
 ------------------------------------------------
-  genuine vs clean  (raw -x):  U = 36.0,  p = 2.1645e-03,  d = -2.840
-  genuine vs forged  (raw -x):  U = 30.0,  p = 6.4935e-02,  d = -1.504
-  forged vs clean  (raw -x):  U = 31.0,  p = 4.1126e-02,  d = -1.670
+  genuine vs clean  (-x):  U = 36.0,  p = 2.1645e-03,  d = 2.840
+  genuine vs forged  (-x):  U = 30.0,  p = 6.4935e-02,  d = 1.504
+  forged vs clean  (-x):  U = 31.0,  p = 4.1126e-02,  d = 1.670
 
 Per-arm descriptive statistics
 ------------------------------------------------
