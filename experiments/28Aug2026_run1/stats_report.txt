@@ -1,0 +1,39 @@
+==============================================================
+  Phase 0 Statistical Analysis
+  Forging Tree-Ring reproduction study
+==============================================================
+
+Detection proportions (Wilson 95% CI)
+------------------------------------------------
+  genuine     6/6 = 1.0000   CI [0.6097, 1.0000]
+  clean       0/6 = 0.0000   CI [0.0000, 0.3903]
+  forged      5/6 = 0.8333   CI [0.4365, 0.9699]
+
+Bootstrap AUC (forged vs clean), 5000 resamples, 95% CI
+------------------------------------------------
+  -x (raw)                  AUC = 0.8611   CI [0.5833, 1.0000]
+  lambda-x (adjusted)       AUC = 0.9722   CI [0.8333, 1.0000]
+
+Bootstrap AUC (genuine vs clean), 5000 resamples, 95% CI
+------------------------------------------------
+  -x (raw)                  AUC = 1.0000   CI [1.0000, 1.0000]
+  lambda-x (adjusted)       AUC = 1.0000   CI [1.0000, 1.0000]
+
+Mann-Whitney U tests (two-sided)
+------------------------------------------------
+  genuine vs clean  (raw -x):  U = 36.0,  p = 2.1645e-03,  d = -2.840
+  genuine vs forged  (raw -x):  U = 30.0,  p = 6.4935e-02,  d = -1.504
+  forged vs clean  (raw -x):  U = 31.0,  p = 4.1126e-02,  d = -1.670
+
+Per-arm descriptive statistics
+------------------------------------------------
+  Arm            mean x   median x       sd x       mean p     median p
+  genuine        1096.5      994.6     231.25     7.96e-24     8.63e-38
+  clean          1623.9     1616.6     124.44     4.80e-01     4.56e-01
+  forged         1391.2     1406.2     152.77     1.50e-02     2.30e-05
+
+Missed forgery (inside clean range)
+------------------------------------------------
+  trial 4: x = 1558.3, p = 9.0081e-02
+  clean range: [1483.7, 1802.2]
+  position within clean range: 23.4%

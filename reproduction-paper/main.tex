@@ -191,6 +191,10 @@ would have let us ignore.
         recoverability and hypothesis separation, reported with measured outcomes and
         including one prediction our data refuted (Sections~\ref{sec:eval}
         and~\ref{sec:disc}).
+  \item A battery of post-hoc statistical tests on the gate data --- bootstrap
+        confidence intervals, pairwise Mann-Whitney tests and effect sizes --- so
+        the recovered separations carry a quantified uncertainty
+        (Section~\ref{sec:eval}).
 \end{itemize}
 
 \section{Background and Related Work}
@@ -741,9 +745,33 @@ from the same eighteen observations; only the transformation differs.}
 \label{fig:roc}
 \end{figure}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.94\textwidth]{figures/fig6_distributions.png}
+\caption{Per-arm distributions of both candidate scores, boxes spanning the
+interquartile range with the individual trials overlaid. The genuine arm clears
+the clean null on both scores; the forged arm occupies the gap between them.}
+\label{fig:dist}
+\end{figure*}
+
 \paragraph{Separation.} Against the clean null the genuine arm separates perfectly,
 AUC $1.000$ on both scores. The forged arm reaches $0.861$ on $-\xstat$ and $0.972$ on
 $\lam - \xstat$. \textbf{G4 passes.}
+
+\paragraph{Hypothesis tests.} Because $n = 6$ per arm can make a single AUC look
+more conclusive than it is, we also ran a small battery of post-hoc tests over the
+same eighteen observations, all of which are reproduced by the accompanying
+\code{stat\_analysis.py} on the published \code{phase0\_scores.csv}. A $95\%$
+bootstrap interval on the forged-vs-clean AUC spans
+$[0.58, 1.00]$ for $-\xstat$ and $[0.83, 1.00]$ for $\lam - \xstat$. A two-sided
+Mann-Whitney test separates the forged arm from the clean null at $p = 0.041$
+and the genuine arm from the clean null at $p = 0.002$, with the two arms sitting
+$1.67$ and $2.84$ pooled standard deviations below the null in the raw statistic
+(Cohen's $d$). The genuine-forged comparison is the loosest of the three at
+$p = 0.065$. That ordering is Figure~\ref{fig:stat}'s intermediate band in
+different clothes: the forged arm is measurably closer to valid evidence than
+the null is, while still not being confusable with a genuine image on six draws.
+Figure~\ref{fig:dist} shows both candidate scores side by side.
 
 \paragraph{One divergence worth naming.} Our forged detection rate of $5/6 = 0.83$
 comes in under the $0.97$ reported originally. At $n = 6$ that difference is not
@@ -951,18 +979,23 @@ handling.
 
 Saifur Rahman Tamim designed the gate protocol, built the environment reconstruction
 and provenance pinning, wrote the mixed-precision patch and probe, and implemented the
-statistic recovery and its validation. Md Taslimul Hasan Toufique \NUM{contribution}.
-Fahim Ibney Hafiz \NUM{contribution}. A.M. Tayeful Islam advised on experimental
-design and reviewed the manuscript. All authors contributed to the analysis and the
-writing.
+statistic recovery and its validation. Md Taslimul Hasan Toufique carried out the
+post-hoc statistical analysis of the gate data (bootstrap confidence intervals,
+pairwise Mann-Whitney tests and effect sizes reported in Section~\ref{sec:eval}),
+produced the distributional figure (Fig.~\ref{fig:dist}) and the script that
+regenerates it, drafted the related-work section, and ran the notebook sessions
+alongside the first author. Fahim Ibney Hafiz \NUM{contribution}. A.M. Tayeful Islam
+advised on experimental design and reviewed the manuscript. All authors contributed
+to the analysis and the writing.
 
 \section*{Availability}
 
 Two repositories accompany this work. The reproduction notebook, the gate artifacts
 (\code{gate1.json}, \code{gate3.json}, \code{gate4.json},
 \code{precision\_probe.json}, \code{phase0\_scores.csv},
-\code{phase0\_verdict.json}, \code{session\_meta.json}), the figure-generating
-script and the source of this paper are at\\
+\code{phase0\_verdict.json}, \code{session\_meta.json}), the statistical re-analysis
+script (\code{stat\_analysis.py}), the figure-generating script and the source of
+this paper are at\\
 \url{https://github.com/sr-tamim/watermark-forgery-research}.
 
 The modified attack code is a fork of M\"uller et al.'s released
