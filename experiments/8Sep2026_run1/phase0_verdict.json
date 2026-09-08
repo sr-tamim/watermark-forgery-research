@@ -1,0 +1,48 @@
+{
+  "G1_vram": {
+    "pass": true,
+    "attacker_gb": 5.57,
+    "target_fp16_gb": 7.36,
+    "target_fp32_gb": 13.68
+  },
+  "G2_timings": {
+    "reprompt": 324.8
+  },
+  "G3_uncensored": {
+    "n": 18,
+    "x_unique": 18,
+    "x_min": 889.1171264648438,
+    "x_max": 1802.162109375,
+    "p_unique": 18,
+    "p_zero_frac": 0.0,
+    "p_min_nonzero": 5.45067676949305e-49,
+    "crosscheck_max_diff": 0.0,
+    "pass": true
+  },
+  "G4_separation": {
+    "auc": {
+      "genuine": 1.0,
+      "forged": 0.8611111111111112
+    },
+    "pass": true
+  },
+  "precision_probe": {
+    "vae fp16": {
+      "nan_vae": false,
+      "nan_unet": false,
+      "p_value": 1.6647911409451942e-36
+    },
+    "vae fp32": {
+      "nan_vae": false,
+      "nan_unet": false,
+      "p_value": 1.6647911409451942e-36
+    }
+  },
+  "env": {
+    "repo_commit": "7f9e7adde758b8451e42925544a48cc242a2cade",
+    "lock_sha256": "5592c7861dbac391b2a68215b751e2a54591739cf27f962cd4f90a161ffbc497",
+    "dtype_target": "torch.float16",
+    "dtype_attacker": "torch.float32",
+    "n_gpu": 2
+  }
+}
