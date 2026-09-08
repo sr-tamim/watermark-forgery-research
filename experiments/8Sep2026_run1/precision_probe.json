@@ -1,0 +1,12 @@
+{
+  "vae fp16": {
+    "nan_vae": false,
+    "nan_unet": false,
+    "p_value": 1.6647911409451942e-36
+  },
+  "vae fp32": {
+    "nan_vae": false,
+    "nan_unet": false,
+    "p_value": 1.6647911409451942e-36
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "attacker_fp32": {
+    "ok": true,
+    "peak_gb": 5.57,
+    "seconds": 32.0,
+    "error": null
+  },
+  "target_fp16": {
+    "ok": true,
+    "peak_gb": 7.36,
+    "seconds": 55.1,
+    "error": null
+  },
+  "target_fp32": {
+    "ok": true,
+    "peak_gb": 13.68,
+    "seconds": 69.9,
+    "error": null
+  },
+  "pass": true
+}
