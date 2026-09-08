@@ -9,18 +9,25 @@ figures/fig2_memory.png    G1 peak memory
 figures/fig3_statistic.png per-arm x, missed forgery circled
 figures/fig4_roc.png       ROC, -x vs lambda-x
 figures/fig5_pvalues.png   p-values vs threshold
+figures/fig6_distributions.png  box+strip by arm, both scores
 main.pdf                   compiled output, 9 pages
 ```
+
+`stat_analysis.py` lives in `experiments/28Aug2026_run1/` and regenerates
+`fig6_distributions.png` plus a `stats_report.txt` from `phase0_scores.csv`.
 
 ## Where the figures come from
 Nothing is copied, traced, or downloaded. `mkfigs.py` draws all five with
 matplotlib and writes them as PNG; `main.tex` pulls them in with
-`\includegraphics` from `figures/`.
+`\includegraphics` from `figures/`. The sixth figure (`fig6_distributions.png`)
+is drawn by `stat_analysis.py`, which also writes `stats_report.txt`.
 
 - Fig. 1 is drawn from scratch using matplotlib boxes and arrows. No external
   image, no template, not adapted from Muller et al.
 - Figs. 2-5 are plotted directly from your run artifacts: `gate1.json` for the
   memory bars, `phase0_scores.csv` for the statistic, ROC and p-value plots.
+- Fig. 6 and the numbers in the paper's statistical paragraph come from
+  `stat_analysis.py`, which reads `phase0_scores.csv`.
 
 Edit the numbers in the artifacts, rerun `python3 mkfigs.py`, and the figures
 update. The paths at the top of `mkfigs.py` point at `/mnt/user-data/uploads/`;
@@ -36,10 +43,9 @@ lock SHA `5592c786`. Artifacts: `gate1.json`, `gate3.json`, `gate4.json`,
 `phase0_verdict.json`. Notebook: `research2-reproduction-paper.ipynb`.
 Reprompt wall-clock is 332.0 s.
 
-## Remaining red markers — 2
-Toufique's contribution, Hafiz's contribution (Division of Work).
-The repository URL marker is also still there if you want a link instead of
-"on request". Check: `grep -c 'NUM{' main.tex`
+## Remaining red markers — 1
+Hafiz's contribution (Division of Work). Toufique's is filled in.
+Check: `grep -c 'NUM{' main.tex`
 
 ## Verified numbers
 G1 5.57 / 7.36 / 13.68 GB, capacity 14.6 · G2 332.0 s · G3 n=18, x 889.1–1802.2,
@@ -47,6 +53,11 @@ df=634, p_zero 0/18, p_min 5.45e-49, crosscheck exactly 0.0 · G4 AUC genuine 1.
 forged 0.861 (-x) / 0.972 (lambda-x), detection 6/6, 0/6, 5/6 · clean mean p 0.480
 vs 0.472 original · missed forgery x=1558.3, clean range 1483.7–1802.2 ·
 seeds 123–128, w_seed fixed at 999999 · sigma 31.75–42.59, lambda 856.6–1541.4
+
+Post-hoc stats (`stat_analysis.py`): bootstrap AUC 95% CI forged-vs-clean
+[0.58, 1.00] (-x) / [0.83, 1.00] (lambda-x) · Mann-Whitney p: genuine-clean
+0.002, forged-clean 0.041, genuine-forged 0.065 · Cohen's d (raw x, pooling):
+genuine-clean -2.84, forged-clean -1.67, genuine-forged -1.50
 
 
 ## Reference audit

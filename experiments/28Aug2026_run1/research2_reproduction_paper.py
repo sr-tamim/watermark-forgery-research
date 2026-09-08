@@ -561,3 +561,112 @@ verdict = {
 (OUT_DIR / "phase0_verdict.json").write_text(json.dumps(verdict, indent=2))
 print(json.dumps(verdict, indent=2))
 print(subprocess.getoutput(f"ls -lh {OUT_DIR}"))
+"""## 7. Post-hoc statistical analysis (stat_analysis.py)
+
+Gates 3/4 above report point-estimate AUCs from six trials per arm. A single number can
+look more conclusive than it is at n = 6, so this section quantifies the uncertainty: a
+95% bootstrap interval on the AUC, Mann-Whitney U tests, pooled Cohen's d, Wilson
+intervals on the detection proportions, and a look at the one forgery the detector
+missed. Same eighteen observations, only the transformation differs. Reproduces the
+numbers quoted in the paper's "Hypothesis tests" paragraph, from phase0_scores.csv.
+"""
+scores = pd.read_csv(OUT_DIR / "phase0_scores.csv")
+scores["neg_x"] = -scores["x"]          # lower x = stronger evidence, so flip it
+scores["lam_x"] = scores["lambd"] - scores["x"]
+
+def bootstrap_auc(pos, neg, n_boot=5000, seed=42):
+    # percentile CI over resamples, no distributional assumption (n is 6 per arm)
+    rng = np.random.default_rng(seed)
+    pos, neg = np.asarray(pos), np.asarray(neg)
+    def _auc(p, n):
+        return float(((p[:, None] > n[None, :]).sum() +
+                      0.5 * (p[:, None] == n[None, :]).sum()) / (len(p) * len(n)))
+    point = _auc(pos, neg)
+    boots = np.array([_auc(rng.choice(pos, len(pos), True),
+                           rng.choice(neg, len(neg), True)) for _ in range(n_boot)])
+    return point, *np.percentile(boots, [2.5, 97.5])
+
+def wilson_ci(k, n, z=1.96):
+    phat, denom = k / n, 1 + z**2 / n
+    centre = (phat + z**2 / (2*n)) / denom
+    margin = z * np.sqrt((phat*(1-phat) + z**2/(4*n)) / n) / denom
+    return centre - margin, centre + margin
+
+def cohens_d(a, b):
+    # pooled SD, positive means a > b
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    sp = np.sqrt(((len(a)-1)*a.var(ddof=1) + (len(b)-1)*b.var(ddof=1)) / (len(a)+len(b)-2))
+    return (a.mean() - b.mean()) / sp
+
+gen, clean, forged = (scores[scores.hypothesis == h] for h in
+                      ("genuine", "clean", "forged"))
+
+print("Detection proportions (Wilson 95% CI)")
+for name, sub in (("genuine", gen), ("clean", clean), ("forged", forged)):
+    k, n = sub["detected"].sum(), len(sub)
+    lo, hi = wilson_ci(k, n)
+    print(f"  {name.lower():<9} {k}/{n} = {k/n:.4f}   CI [{lo:.4f}, {hi:.4f}]")
+
+print("\nBootstrap AUC (vs clean), 5000 resamples, 95% CI")
+for tag, arm in (("forged", forged), ("genuine", gen)):
+    for sname, col in (("-x", "neg_x"), ("lambda-x", "lam_x")):
+        pt, lo, hi = bootstrap_auc(arm[col], clean[col])
+        print(f"  {tag:<7} on {sname:<10} AUC = {pt:.4f}   CI [{lo:.4f}, {hi:.4f}]")
+
+
+print("Mann-Whitney U tests (two-sided) and Cohen's d, on -x")
+for n1, s1, n2, s2 in (("genuine", gen, "clean", clean),
+                       ("genuine", gen, "forged", forged),
+                       ("forged", forged, "clean", clean)):
+    u, p = scipy.stats.mannwhitneyu(s1["neg_x"], s2["neg_x"], alternative="two-sided")
+    d = cohens_d(s1["neg_x"], s2["neg_x"])
+    print(f"  {n1} vs {n2}:  U = {u:.1f},  p = {p:.4e},  d = {d:.3f}")
+
+print("\nPer-arm descriptive statistics")
+for name, sub in (("genuine", gen), ("clean", clean), ("forged", forged)):
+    print(f"  {name.lower():<8} mean x {sub['x'].mean():8.1f}  "
+          f"median x {sub['x'].median():8.1f}  sd x {sub['x'].std():8.2f}  "
+          f"mean p {sub['p_value'].mean():.2e}")
+
+missed = forged[~forged["detected"]]
+if len(missed):
+    print("\nMissed forgery (inside clean range)")
+    lo, hi = clean["x"].min(), clean["x"].max()
+    for _, r in missed.iterrows():
+        x_in_clean = (r["x"] - lo) / (hi - lo) * 100
+        print(f"  trial {int(r['trial'])}: x = {r['x']:.1f}, p = {r['p_value']:.3e}")
+        print(f"  clean range [{lo:.1f}, {hi:.1f}] (x sits {x_in_clean:.1f}% along it)")
+
+
+# Figure 6 in the paper: box + strip per arm, both candidate scores
+plt.rcParams.update({
+    "font.family": "serif", "font.serif": ["DejaVu Serif"], "font.size": 8,
+    "axes.labelsize": 8, "axes.titlesize": 8.5, "xtick.labelsize": 7.5,
+    "ytick.labelsize": 7.5, "axes.spines.top": False, "axes.spines.right": False,
+    "figure.dpi": 400, "savefig.bbox": "tight", "savefig.pad_inches": 0.02,
+})
+COL = {"clean": "#8c8c8c", "forged": "#c8632a", "genuine": "#2f6f4e"}
+ORD = ["clean", "forged", "genuine"]
+
+fig, axes = plt.subplots(1, 2, figsize=(6.8, 2.6))
+for ax, col, label in zip(axes, ["neg_x", "lam_x"],
+                          [r"$-x$  (raw)", r"$\lambda - x$  (adjusted)"]):
+    data = [scores[scores.hypothesis == h][col].values for h in ORD]
+    bp = ax.boxplot(data, widths=0.45, patch_artist=True,
+                    medianprops=dict(color="black", lw=1.2),
+                    whiskerprops=dict(lw=0.8), capprops=dict(lw=0.8),
+                    flierprops=dict(marker="none"))
+    for patch, h in zip(bp["boxes"], ORD):
+        patch.set_facecolor(COL[h]); patch.set_alpha(0.35); patch.set_edgecolor(COL[h])
+    rng = np.random.default_rng(7)   # fixed jitter seed so the figure is reproducible
+    for i, h in enumerate(ORD):
+        vals = scores[scores.hypothesis == h][col].values
+        jit = rng.uniform(-0.08, 0.08, len(vals))
+        ax.scatter(np.full(len(vals), i + 1) + jit, vals, s=24, color=COL[h],
+                   alpha=0.85, zorder=3, edgecolor="white", linewidth=0.5)
+    ax.set_xticks(range(1, 4)); ax.set_xticklabels(ORD)
+    ax.set_ylabel(label); ax.grid(axis="y", lw=0.4, color="#eee", zorder=0)
+plt.tight_layout()
+plt.savefig(OUT_DIR / "fig6_distributions.png", dpi=400)
+plt.show()
+
