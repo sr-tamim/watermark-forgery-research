@@ -39,7 +39,6 @@ Session 1 additionally contains:
 |---|---|
 | `stat_analysis.py` | Post-hoc statistics: Wilson intervals, bootstrap AUC CIs, Mann-Whitney tests, Cohen's *d*; also draws Fig. 6 |
 | `stats_report.txt` | Output of `stat_analysis.py`, quoted in the paper's uncertainty analysis |
-| `research2_reproduction_paper.py` | Plain-Python export of the notebook |
 
 To regenerate `stats_report.txt` and `fig6_distributions.png`:
 

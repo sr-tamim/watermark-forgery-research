@@ -129,8 +129,7 @@ Please also cite the original attack:
 ## License
 
 - **Code** (notebooks, `*.py`): [MIT](LICENSE)
-- **Paper source, figures and measurement data** (`paper/`, experiment
-  artifacts): [CC BY 4.0](LICENSE-CC-BY-4.0)
+- **Paper source, figures and measurement data** (non-code files under `paper/` and `experiments/`): [CC BY 4.0](LICENSE-CC-BY-4.0)
 
 The attack implementation itself is not in this repository. It lives in the
 fork linked above and remains under its original authors' terms.
