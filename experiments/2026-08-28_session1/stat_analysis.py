@@ -9,7 +9,7 @@ Reads phase0_scores.csv and computes:
   - Wilson score intervals for detection proportions
   - the numbers quoted in the paper's "Hypothesis tests" paragraph
 
-Run from the experiments/28Aug2026_run1/ directory:
+Run from the experiments/2026-08-28_session1/ directory:
     python stat_analysis.py
 
 Output: stats_report.txt (printed to stdout), fig6_distributions.png

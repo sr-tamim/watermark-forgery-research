@@ -1,77 +1,142 @@
-# Forging Tree-Ring — paper source
+# Forging Tree-Ring: Reproducing and Instrumenting Black-Box Semantic Watermark Forgery
+
+[![arXiv](https://img.shields.io/badge/arXiv-ARXIV__ID-b31b1b.svg)](https://arxiv.org/abs/ARXIV_ID)
+[![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
+[![Paper & data: CC BY 4.0](https://img.shields.io/badge/paper%20%26%20data-CC%20BY%204.0-lightgrey.svg)](LICENSE-CC-BY-4.0)
+
+**Saifur Rahman Tamim, Md Taslimul Hasan Toufique, A.M. Tayeful Islam**
+Department of Computer Science and Engineering, Northern University Bangladesh
+
+This repository contains the paper source, reproduction notebook, measurement
+artifacts and analysis scripts for our reproduction of the *Reprompt* semantic
+watermark forgery attack of Müller et al.
+([CVPR 2025](https://arxiv.org/abs/2412.03283)) against Tree-Ring on Stable
+Diffusion XL. We ran it on free-tier dual NVIDIA T4 GPUs (14.6 GB each).
+
+The git tag
+[`arxiv-v1`](https://github.com/sr-tamim/watermark-forgery-research/tree/arxiv-v1)
+marks the state described in the
+arXiv paper.
+
+## Summary
+
+| Arm     | Detected | Mean *x* | Mean *λ − x* | Original rate |
+|---------|:--------:|---------:|-------------:|:-------------:|
+| genuine | 6/6      | 1096.5   | +220.0       | 1.00          |
+| clean   | 0/6      | 1623.9   | −626.3       | 0.01          |
+| forged  | 5/6      | 1391.2   | −371.3       | 0.97          |
+
+- **The attack reproduces**, at 325–332 s per attack on a T4.
+- **The detector discards its own statistic.** The released Tree-Ring detector
+  computes a non-central χ² statistic and returns only its CDF. We recover the
+  statistic exactly (maximum difference 0 across all 18 observations). Two
+  natural scores built from it separate forged from clean at AUC 0.861 (−*x*)
+  and 0.972 (*λ − x*).
+- **SDXL runs in fp16** once the pipeline's direct VAE calls are upcast. A
+  controlled probe shows the patched path leaves the detector output unchanged.
+- **Determinism:** the full pipeline was run in two independent sessions
+  (28 Aug and 8 Sep 2026). Every statistic matched; only wall-clock time
+  differed.
+
+See the paper for the gate protocol, limitations (notably the single watermark
+key and *n* = 18), and discussion.
+
+## Repository layout
 
 ```
-main.tex                   everything: preamble + all sections
-refs.bib                   21 entries, all 21 cited in the text
-mkfigs.py                  regenerates all five figures
-figures/fig1_pipeline.png  attack flow diagram
-figures/fig2_memory.png    G1 peak memory
-figures/fig3_statistic.png per-arm x, missed forgery circled
-figures/fig4_roc.png       ROC, -x vs lambda-x
-figures/fig5_pvalues.png   p-values vs threshold
-figures/fig6_distributions.png  box+strip by arm, both scores
-main.pdf                   compiled output, 9 pages
+.
+├── paper/                          LaTeX source of the arXiv paper
+│   ├── main.tex, refs.bib          paper source (as submitted)
+│   ├── main.pdf                    compiled paper
+│   ├── mkfigs.py                   regenerates Figs. 1–5
+│   └── figures/                    Figs. 1–6
+│
+└── experiments/                    one folder per notebook session
+    ├── 2026-08-28_session1/        the session quoted in the paper
+    │   ├── tree_ring_reprompt_reproduction.ipynb   executed notebook
+    │   ├── gate1.json … session_meta.json         measurement artifacts
+    │   ├── stat_analysis.py        post-hoc statistics + Fig. 6
+    │   └── stats_report.txt        output of stat_analysis.py
+    └── 2026-09-08_session2/        independent re-execution
 ```
 
-`stat_analysis.py` lives in `experiments/28Aug2026_run1/` and regenerates
-`fig6_distributions.png` plus a `stats_report.txt` from `phase0_scores.csv`.
+[`experiments/README.md`](experiments/README.md) describes every artifact
+file. [`paper/README.md`](paper/README.md) covers building the paper and where
+each figure comes from.
 
-## Where the figures come from
-Nothing is copied, traced, or downloaded. `mkfigs.py` draws all five with
-matplotlib and writes them as PNG; `main.tex` pulls them in with
-`\includegraphics` from `figures/`. The sixth figure (`fig6_distributions.png`)
-is drawn by `stat_analysis.py`, which also writes `stats_report.txt`.
+## Reproducing
 
-- Fig. 1 is drawn from scratch using matplotlib boxes and arrows. No external
-  image, no template, not adapted from Muller et al.
-- Figs. 2-5 are plotted directly from your run artifacts: `gate1.json` for the
-  memory bars, `phase0_scores.csv` for the statistic, ROC and p-value plots.
-- Fig. 6 and the numbers in the paper's statistical paragraph come from
-  `stat_analysis.py`, which reads `phase0_scores.csv`.
+### 1. Rerun the experiment (GPU)
 
-Edit the numbers in the artifacts, rerun `python3 mkfigs.py`, and the figures
-update. The paths at the top of `mkfigs.py` point at `/mnt/user-data/uploads/`;
-change `U = ...` to wherever your JSON and CSV live.
+The notebook targets a Kaggle notebook with the **GPU T4 ×2** accelerator
+(the P100 is not supported by PyTorch 2.10). Open
+`experiments/2026-08-28_session1/tree_ring_reprompt_reproduction.ipynb`, run
+it top to bottom, and restart the kernel when the pinning cell asks you to.
+Outputs are written to `/kaggle/working/phase0_out`.
 
-Build: `latexmk -pdf main.tex`. 9 pages, 0 undefined references.
-Overleaf: upload all, keep `figures/` a folder, compiler pdfLaTeX.
+The notebook clones our fork of the released attack code and hard-resets it
+to the exact commit used for every run in the paper:
 
-## Run used
-Session `2026-08-28T05:28:33`, repo commit `7f9e7ad`, upstream base `ca68950`,
-lock SHA `5592c786`. Artifacts: `gate1.json`, `gate3.json`, `gate4.json`,
-`gate4` figures, `timings.json`, `precision_probe.json`, `phase0_scores.csv`,
-`phase0_verdict.json`. Notebook: `research2-reproduction-paper.ipynb`.
-Reprompt wall-clock is 332.0 s.
+| | Repository | Commit |
+|---|---|---|
+| Fork (used) | [sr-tamim/semantic-forgery](https://github.com/sr-tamim/semantic-forgery) | `7f9e7ad` |
+| Upstream base | [and-mill/semantic-forgery](https://github.com/and-mill/semantic-forgery) | `ca68950` |
 
-## Remaining red markers — 1
-Hafiz's contribution (Division of Work). Toufique's is filled in.
-Check: `grep -c 'NUM{' main.tex`
+Models: `stabilityai/stable-diffusion-xl-base-1.0` (target, fp16) and
+`Manojb/stable-diffusion-2-1-base` (attacker, fp32; a mirror of the withdrawn
+SD 2.1 base weights). `session_meta.json` records library versions, dtypes,
+devices and the SHA-256 of the resolved dependency lock.
 
-## Verified numbers
-G1 5.57 / 7.36 / 13.68 GB, capacity 14.6 · G2 332.0 s · G3 n=18, x 889.1–1802.2,
-df=634, p_zero 0/18, p_min 5.45e-49, crosscheck exactly 0.0 · G4 AUC genuine 1.000,
-forged 0.861 (-x) / 0.972 (lambda-x), detection 6/6, 0/6, 5/6 · clean mean p 0.480
-vs 0.472 original · missed forgery x=1558.3, clean range 1483.7–1802.2 ·
-seeds 123–128, w_seed fixed at 999999 · sigma 31.75–42.59, lambda 856.6–1541.4
+### 2. Recompute the statistics and figures (CPU)
 
-Post-hoc stats (`stat_analysis.py`): bootstrap AUC 95% CI forged-vs-clean
-[0.58, 1.00] (-x) / [0.83, 1.00] (lambda-x) · Mann-Whitney p: genuine-clean
-0.002, forged-clean 0.041, genuine-forged 0.065 · Cohen's d (raw x, pooling):
-genuine-clean -2.84, forged-clean -1.67, genuine-forged -1.50
+Both steps need only `numpy pandas scipy matplotlib`.
 
+```bash
+# post-hoc statistics (stats_report.txt) and Fig. 6
+cd experiments/2026-08-28_session1
+python stat_analysis.py
 
-## Reference audit
-Every entry in `refs.bib` is cited somewhere in `main.tex`. BibTeX only prints
-entries that are cited, so an uncited entry would silently vanish from the PDF
-rather than pad it. Check with:
-
-```
-grep -o 'cite{[^}]*}' main.tex | tr -d 'cite{}' | tr ',' '\n' | sort -u
+# Figs. 1–5, written to paper/figures/
+cd ../../paper
+python mkfigs.py
 ```
 
-Verified against arXiv / proceedings pages rather than recalled: Muller (CVPR
-2025), Wen Tree-Ring (NeurIPS 2023), Yang Gaussian Shading (CVPR 2024, pp.
-12162-12171), Ci RingID (ECCV 2024, pp. 338-354), Gunn (ICLR 2025), Zhao
-(NeurIPS 2024), Zhou MetaSeal (TMLR 2026), Zhu PnP (arXiv 2506.06018), Fernandez
-Stable Signature (ICCV 2023), Zhu HiDDeN (ECCV 2018), An WAVES (ICML 2024),
-Hwang (arXiv 2412.12511), Olszewski (CCS 2023), Arp (USENIX Sec 2022).
+## Citation
+
+```bibtex
+@article{tamim2026forging,
+  title   = {Forging Tree-Ring: Reproducing and Instrumenting Black-Box
+             Semantic Watermark Forgery},
+  author  = {Tamim, Saifur Rahman and Toufique, Md Taslimul Hasan and
+             Islam, A.M. Tayeful},
+  journal = {arXiv preprint arXiv:ARXIV_ID},
+  year    = {2026}
+}
+```
+
+Please also cite the original attack:
+
+```bibtex
+@inproceedings{muller2025semantic,
+  title     = {Black-Box Forgery Attacks on Semantic Watermarks for Diffusion Models},
+  author    = {M{\"u}ller, Andreas and Lukovnikov, Denis and Thietke, Jonas and
+               Fischer, Asja and Quiring, Erwin},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2025}
+}
+```
+
+## License
+
+- **Code** (notebooks, `*.py`): [MIT](LICENSE)
+- **Paper source, figures and measurement data** (`paper/`, experiment
+  artifacts): [CC BY 4.0](LICENSE-CC-BY-4.0)
+
+The attack implementation itself is not in this repository. It lives in the
+fork linked above and remains under its original authors' terms.
+
+## Acknowledgements
+
+This paper is the final project report for CSE 4383: Image Processing and
+Computer Vision Lab Work, Northern University Bangladesh. We thank Müller et
+al. for releasing their code.

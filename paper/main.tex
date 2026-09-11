@@ -76,14 +76,16 @@
 \newcommand{\symfootnote}[2]{\begingroup
   \renewcommand\thefootnote{#1}\footnotetext{#2}\endgroup}
 \makeatother
-\newcommand{\NUM}[1]{\textcolor{red}{\textbf{[#1]}}}
 
+\newcommand{\reptime}{$325$--$332$\,s}
 \newcommand{\xstat}{\ensuremath{x}}
 \newcommand{\lam}{\ensuremath{\lambda}}
 % ---- end preamble ----
 
-\title{\vspace{-1.5em}\Large\bf Forging Tree-Ring: A Reproduction Study of
-Semantic Watermark Forgery}
+% To revert the title, comment the block below and uncomment this line:
+% \title{\vspace{-1.5em}\Large\bf Forging Tree-Ring: A Reproduction Study of Semantic Watermark Forgery}
+\title{\vspace{-1.5em}\Large\bf Forging Tree-Ring: Reproducing and Instrumenting
+Black-Box Semantic Watermark Forgery}
 
 \author{
 {\normalsize Saifur Rahman Tamim\textsuperscript{1},
@@ -112,7 +114,7 @@ authors' released code, on free-tier dual T4 GPUs with 14.6\,GB of usable memory
 substantially less per-GPU memory than the A40 hardware used in the original study.
 
 The attack reproduces. Over six trials of three arms we detect genuine images $6/6$,
-clean images $0/6$, and forged images $5/6$, at $332.0$\,s per attack. Three further
+clean images $0/6$, and forged images $5/6$, at \reptime\ per attack. Three further
 results came out of running it under constraint. The released detector computes a
 non-central $\chi^2$ statistic and hands back only its CDF, so we recovered the
 discarded statistic; our recovery matches the released detector exactly, and two
@@ -175,7 +177,7 @@ would have let us ignore.
 \begin{itemize}\itemsep2pt
   \item A verified reproduction of Reprompt against Tree-Ring on SDXL under a fully
         pinned software and provenance configuration, with genuine, clean and forged
-        detections all landing inside the originally reported distributions
+        detection rates all consistent with the originally reported ones
         (Section~\ref{sec:eval}).
   \item Recovery of the detector's discarded non-central $\chi^2$ statistic, matching
         the released detector exactly, and the observation that two scores derived
@@ -188,10 +190,10 @@ would have let us ignore.
         recoverability and hypothesis separation, reported with measured outcomes and
         including one prediction our data refuted (Sections~\ref{sec:eval}
         and~\ref{sec:disc}).
-  \item A battery of post-hoc statistical tests on the gate data --- bootstrap
-        confidence intervals, pairwise Mann-Whitney tests and effect sizes --- so
-        the recovered separations carry a quantified uncertainty
-        (Section~\ref{sec:eval}).
+  \item An exploratory uncertainty analysis of the gate data (bootstrap
+        confidence intervals, pairwise rank tests and effect sizes) that bounds
+        how much the recovered separations can support at this sample size, and
+        finds that bound to be low (Section~\ref{sec:eval}).
 \end{itemize}
 
 \section{Background and Related Work}
@@ -226,7 +228,8 @@ computes
 \label{eq:trstat}
 \end{equation}
 %
-and reports $p = F_{\chi'^2}(\xstat;\, \mathrm{df},\, \lam)$. A detection is declared
+and reports $p = F_{\chi'^2}(\xstat;\, \mathrm{df},\, \lam)$, where $\mathrm{df}$ counts the
+real and imaginary masked coefficients. A detection is declared
 when $p < \tau$; for SDXL~\cite{podell2024sdxl} at a $1\%$ false-positive rate,
 $\tau = 0.0261$. One detail matters later: detection works on an \emph{estimate} of
 $z_T$, since DDIM inversion is only approximately invertible. Every detection is
@@ -279,7 +282,17 @@ al.~\cite{zhou2026metaseal} approach the problem from the defensive side with
 MetaSeal, arguing that content-agnostic marks verified by a detector are structurally
 forgeable and that cryptographic, content-dependent signatures are the way out. Their
 framing is useful to us: it identifies the two properties that make a scheme
-forgeable in the way Tree-Ring is.
+forgeable in the way Tree-Ring is. Zhang et al.~\cite{zhang2026sembind} attack the same problem
+from the generative side with SemBind, binding the latent watermark signal to image
+semantics through a contrastively trained masker so that a latent lifted from one
+image no longer verifies against unrelated content. Closest to our own observations,
+Lee et al.~\cite{lee2026geometric} model black-box forgery as a rate-distortion problem and
+argue that proxy-target model mismatch imposes an irreducible distortion floor on how
+faithfully a watermark can be forged, manifesting as structured geometric deviation
+on the latent manifold rather than as noise, which they exploit for scheme-agnostic
+detection ahead of watermark verification. Our forged arm occupying a measurable band
+between the clean null and the genuine arm (Section~\ref{sec:eval}) is an empirical
+signature consistent with such a floor, arrived at independently and by measurement alone.
 
 \subsection{Reproduction as a research activity}
 
@@ -345,8 +358,8 @@ injection, \code{l1\_complex} measurement, giving $\mathrm{df} = 634$. The SDXL
 threshold is $\tau = 0.0261008646426459$, taken from the original calibration at a
 $1\%$ false-positive rate.
 
-Seeds need care in interpreting our results. The base seed is $123$ and trial $i$
-generates at seed $123 + i$, so the six trials use $123$ through $128$. The Tree-Ring
+Two seeds are in play and they should not be confused. The generation seed is $123 + i$ for
+trial $i$, so the six trials use $123$ through $128$. The Tree-Ring
 key is \emph{not} varied: \code{w\_seed} is fixed at $999999$ for every trial. All
 eighteen observations therefore share one watermark key, which is the study's
 sharpest limitation and is discussed in Section~\ref{sec:limits}.
@@ -380,9 +393,9 @@ runtime patching for two reasons. Monkey-patching in the notebook process is inv
 to anything launched as a subprocess, so a patched detector in the parent does not
 apply to the attack script it starts. And a dirty working tree satisfies a commit-hash
 check while running code that is not in the recorded commit. The notebook therefore
-issues \code{git reset --hard} to the pinned SHA followed by \code{git clean -fd},
+issues \code{git reset -{}-hard} to the pinned SHA followed by \code{git clean -fd},
 re-reads \code{HEAD}, and asserts both that it matches and that
-\code{git status --porcelain} comes back empty.
+\code{git status -{}-porcelain} comes back empty.
 
 Session metadata is serialised at the start of every run: commit hashes for our fork
 and the upstream base, model identifiers, dtypes, device assignment, library versions,
@@ -405,7 +418,7 @@ badly, and none is meant to produce a finding about watermarking:
 \section{Environment Reconstruction}
 \label{sec:env}
 
-Four things broke before anything ran. We report them as findings rather than as a
+Four things broke before we had a usable pipeline. We report them as findings rather than as a
 narrative because each one generalises past this particular repository.
 
 \subsection{Package removal is not idempotent in layered images}
@@ -498,11 +511,13 @@ quantities are computed and thrown away.
 
 For a detector whose job is to accept or reject, that is a sensible interface. It gets
 limiting as soon as a consumer needs to compare evidence strengths instead of
-outcomes. A CDF value is a tail probability, so the whole range of strong evidence
-gets squeezed into a narrow band next to zero where floating-point resolution starts
-to matter more than the underlying measurement. The accuracy accessor saturates at
-$1.0$ and loses more still. And differences in $p$ do not correspond to comparable
-differences in how well the recovered spectrum actually matches the key.
+outcomes. A CDF value is a tail probability, so the whole range of strong evidence is
+compressed into a narrow band next to zero; the accuracy accessor saturates at $1.0$
+and loses more still. More simply, $\xstat$, $\lam$, $\mathrm{df}$ and $\sigma$ are all
+computed and then not returned, and differences in $p$ do not correspond to comparable
+differences in how well the recovered spectrum actually matches the key. We had also
+expected the compression to produce outright numerical censoring; it did not, and
+Section~\ref{sec:g3} reports that measurement.
 
 So we reimplemented Equation~\ref{eq:trstat} with $\xstat$, $\lam$, $\mathrm{df}$ and
 $\sigma$ all kept (Listing~\ref{lst:rawstat}). The computation is the detector's; only
@@ -536,9 +551,8 @@ A reimplemented statistic is only useful if it agrees with the one the detector
 applies. On every observation we push our recovered $\xstat$ back through the same CDF
 and compare against what the released detector returns for that latent, asserting
 agreement below $10^{-12}$. The assertion held on all eighteen observations at a
-maximum absolute difference of exactly $0$. Our reimplementation is not an
-approximation of the detector's computation; it is the same computation. That matters
-because it rules out reimplementation error as an explanation for anything in
+maximum absolute difference of exactly $0$. The arithmetic is identical rather than
+approximate, which rules out reimplementation error as an explanation for anything in
 Section~\ref{sec:eval}.
 
 \subsection{The choice of score is a modelling decision}
@@ -562,18 +576,18 @@ selection on the test set. We report both and treat neither as canonical.
 
 \subsection{Measurement harness}
 
-The released attack script writes only the censored $p$-value to its metrics output,
+The released attack script writes only the $p$-value to its metrics output,
 so our measurement runs do not go through it. We assemble the attack from the
 repository's own primitives, with inversion, generation and detection all unmodified,
 and add a third arm the script does not produce. Each trial yields three observations
 against a common watermark instance:
 
 \begin{itemize}\itemsep2pt
-\item \textbf{genuine} --- a watermarked latent generated in the target and inverted
+\item \textbf{genuine}: a watermarked latent generated in the target and inverted
       back;
-\item \textbf{clean} --- the same prompt generated from ordinary Gaussian noise, an
+\item \textbf{clean}: the same prompt generated from ordinary Gaussian noise, an
       empirical null for both other arms;
-\item \textbf{forged} --- the genuine image inverted in the attacker model,
+\item \textbf{forged}: the genuine image inverted in the attacker model,
       regenerated there under an unrelated prompt, and handed back to the target
       detector.
 \end{itemize}
@@ -616,10 +630,15 @@ validation are ours.
 \section{Evaluation}
 \label{sec:eval}
 
+The full pipeline was executed twice in independent sessions eleven days apart, from a
+clean environment build each time. Every statistic reported below reproduced to the last
+significant digit across both runs; wall-clock time was the only quantity that varied, by
+$2.2\%$. Figures quoted here are from the first session.
+
 All results below come from six trials of three arms, $n = 18$ observations, at
 generation seeds $123$ through $128$ under the single fixed Tree-Ring key.
 
-\subsection{G1 --- memory feasibility}
+\subsection{G1: memory feasibility}
 
 \begin{figure}[t]
 \centering
@@ -642,19 +661,20 @@ hardware. What it buys is headroom: $6.32$\,GB of it, leaving roughly $7.2$\,GB 
 on the target device rather than under $1$\,GB. We adopted it for that margin, not
 out of necessity.
 
-\subsection{G2 --- wall-clock cost}
+\subsection{G2: wall-clock cost}
 
-One Reprompt run through the released entry point completes in $332.0$\,s on a T4.
+One Reprompt run through the released entry point completes in \reptime\ on a T4, measured across two independent sessions ($332.0$\,s and $324.8$\,s).
 M\"uller et al.\ report roughly $30$ seconds for the smaller models and up to two
 minutes for FLUX.1 in single-GPU, single-batch runs, with their full experimental
 campaign spread over eight A40s. Our figure is therefore several times their published
-single-GPU range, which is about what the difference in memory bandwidth and
-tensor-core generation would predict. \textbf{G2 passes.}
+single-GPU range, which is in line with the gap in memory bandwidth and tensor-core
+generation between the two cards. \textbf{G2 passes.}
 
 The number that matters for a threat model is not the ratio but the absolute cost.
 Forgery is a sub-six-minute operation on hardware anyone can access for free.
 
-\subsection{G3 --- statistic recoverability and range}
+\subsection{G3: statistic recoverability and range}
+\label{sec:g3}
 
 All eighteen observations produced distinct values of $\xstat$, spanning $889.1$ to
 $1802.2$ against $\mathrm{df} = 634$, and the cross-check against the released
@@ -671,7 +691,7 @@ $5.45 \times 10^{-49}$. The prediction failed. The case for recovering the raw
 statistic still stands on the grounds in Section~\ref{sec:score}, but not on the
 grounds we originally gave for it.
 
-\subsection{G4 --- hypothesis separation}
+\subsection{G4: hypothesis separation}
 
 \begin{table}[t]
 \centering\small
@@ -680,7 +700,7 @@ the same model pairing.}
 \label{tab:arms}
 \begin{tabular}{lrrrr}
 \toprule
-Arm & $\bar{\xstat}$ & $\overline{\lam - \xstat}$ & detected & orig. \\
+Arm & $\bar{\xstat}$ & $\overline{\lam - \xstat}$ & detected & orig.\ rate \\
 \midrule
 genuine & $1096.5$ & $+220.0$ & $6/6$ & $1.00$ \\
 clean   & $1623.9$ & $-626.3$ & $0/6$ & $0.01$ \\
@@ -730,7 +750,7 @@ $p$ of $0.480$ against $0.472$ and no false positives in six trials against a re
 rate of $0.01$. That is the arm that most directly validates the detector as we
 configured it. The genuine arm is detected every time. The forged arm crosses
 $\tau = 0.0261$ in five of six trials at a median $p$ of $2.30 \times 10^{-5}$, three
-orders of magnitude clear of the threshold. Running the released entry point directly
+orders of magnitude clear of the threshold (Figure~\ref{fig:pvals}). Running the released entry point directly
 gave the same picture: a genuine $p$ of $3.53 \times 10^{-33}$ and a forged $p$ of
 $3.13 \times 10^{-6}$, both detected.
 
@@ -755,20 +775,40 @@ the clean null on both scores; the forged arm occupies the gap between them.}
 AUC $1.000$ on both scores. The forged arm reaches $0.861$ on $-\xstat$ and $0.972$ on
 $\lam - \xstat$. \textbf{G4 passes.}
 
-\paragraph{Hypothesis tests.} Because $n = 6$ per arm can make a single AUC look
-more conclusive than it is, we also ran a small battery of post-hoc tests over the
-same eighteen observations, all of which are reproduced by the accompanying
+\paragraph{Exploratory uncertainty analysis.} Because $n = 6$ per arm can make a
+single AUC look more conclusive than it is, we also ran a small battery of post-hoc
+tests over the same eighteen observations, all of which are reproduced by the accompanying
 \code{stat\_analysis.py} on the published \code{phase0\_scores.csv}. A $95\%$
 bootstrap interval on the forged-vs-clean AUC spans
 $[0.58, 1.00]$ for $-\xstat$ and $[0.83, 1.00]$ for $\lam - \xstat$. A two-sided
 Mann-Whitney test separates the forged arm from the clean null at $p = 0.041$
-and the genuine arm from the clean null at $p = 0.002$, with the two arms sitting
+and the genuine arm from the clean null at $p = 0.002$, with the forged and genuine arms sitting
 $1.67$ and $2.84$ pooled standard deviations below the null in the raw statistic
 (Cohen's $d$). The genuine-forged comparison is the loosest of the three at
 $p = 0.065$. That ordering is Figure~\ref{fig:stat}'s intermediate band in
 different clothes: the forged arm is measurably closer to valid evidence than
 the null is, while still not being confusable with a genuine image on six draws.
 Figure~\ref{fig:dist} shows both candidate scores side by side.
+
+These values bound the evidence rather than establish it, and we report them as
+exploratory throughout. Three limits apply at once. The observations are matched by
+trial (the forged image of trial $i$ is derived from the genuine image of that
+trial, and the clean image shares its prompt), so an unpaired test is not the
+natural one for this design. The sample size puts both candidate tests near their
+resolution limits: at $n = 6$ per arm the smallest attainable two-sided Mann-Whitney
+$p$ is $2/\binom{12}{6} = 0.0022$ and the smallest attainable exact paired Wilcoxon
+$p$ is $2/2^{6} = 0.0312$, so a value at either floor records complete separation and
+nothing finer. And the three comparisons are uncorrected; under a Bonferroni
+correction at $\alpha = 0.05/3$ none of the paired tests survives on either score,
+which the $0.0312$ floor already guarantees, while the unpaired tests survive on
+$\lam - \xstat$ but not on $-\xstat$.
+
+Which conclusion one reaches therefore depends on the score and on the test, and we
+are not in a position to adjudicate either at eighteen observations. We draw no
+inferential conclusion from these numbers and rely on the bootstrap intervals and
+descriptive effect sizes instead, which is also why the AUC values in
+Section~\ref{sec:score} carry the argument about score choice rather than these
+tests.
 
 \paragraph{One divergence worth naming.} Our forged detection rate of $5/6 = 0.83$
 comes in under the $0.97$ reported originally. At $n = 6$ that difference is not
@@ -778,8 +818,8 @@ their value. We are not claiming the attack is weaker than reported.
 The shape of the failure is more interesting than the rate. Figure~\ref{fig:stat}
 shows the forged arm occupying a band between the clean null and the genuine arm, and
 the one forgery the detector missed has $\xstat = 1558.3$, sitting inside the clean
-range of $1483.7$ to $1802.2$. It did not fail narrowly: its $\xstat$ value fell inside the
-observed clean range.
+range of $1483.7$ to $1802.2$. It did not fail narrowly; on the statistic the detector
+actually uses, that image was indistinguishable from an unwatermarked one.
 
 That intermediate band is the observation we would carry forward. A detector working
 as a binary test reports the five successful forgeries and the six genuine images
@@ -824,7 +864,7 @@ construct an environment where the other $55\%$ can run.
 
 \subsection{Detector interfaces decide what can be asked}
 
-The result we would most like to see carried elsewhere concerns the detector's return
+The result we most want other researchers to pick up concerns the detector's return
 type rather than the attack. Returning a thresholded decision or a CDF value is enough
 for deployment and not enough for analysis. Our whole instrumentation effort exists to
 undo one line of the released detector: the decision to return $p$ instead of the
@@ -845,9 +885,8 @@ wrong in the same way.
 
 The first was that the detector's $p$-value is left-censored at zero. The reasoning
 was not silly: a non-central $\chi^2$ CDF evaluated deep into its lower tail is a
-plausible underflow candidate. Direct measurement disproved it. None of the eighteen
-$p$-values was zero, all eighteen were distinct, and the minimum was
-$5.45 \times 10^{-49}$.
+plausible underflow candidate. Section~\ref{sec:g3} reports the measurement that
+disproved it.
 
 The second concerned half precision. The targeted autoencoder upcast resolved the
 observed failure, but our controlled probe was run after the patch was already in the
@@ -870,7 +909,7 @@ evaluation tend to survive it unexamined.
 \subsection{What this says about the attack}
 
 Our reproduction supports the original conclusion. Forgery worked in five of six
-trials on the first configuration we tried, at $332.0$\,s per attempt on free
+trials on the first configuration we tried, at \reptime\ per attempt on free
 hardware, using a proxy that shares no weights with the target. The attacker needs one
 watermarked reference image, and the median forged $p$-value lands three orders of
 magnitude below the calibrated threshold.
@@ -905,6 +944,12 @@ limitation and the first thing we correct in subsequent work. It matters more he
 than it would for a robustness study, since Ci et al.~\cite{ci2024ringid} showed the
 multi-key setting is exactly where Tree-Ring's behaviour departs from the single-key
 case.
+
+\textbf{No forgery-detection baseline.} We measure what the Tree-Ring detector sees
+and do not attempt to separate forged from genuine by other means. Lee et
+al.~\cite{lee2026geometric} propose a scheme-agnostic pre-verification detector built
+on exactly the geometric deviation our intermediate band is consistent with;
+evaluating it on our arms is the natural next comparison and we have not run it.
 
 \textbf{Sample size.} Eighteen observations, six per arm. Enough to establish that the
 attack reproduces and the statistic is recoverable; not enough for a distributional
@@ -945,11 +990,11 @@ We reproduced the Reprompt semantic watermark forgery attack against Tree-Ring o
 Stable Diffusion~XL, using the authors' released implementation on free-tier dual T4 GPUs with substantially less
 per-GPU memory than the original evaluation environment. The attack
 reproduces: genuine images detected six times out of six, clean images none, forged
-images five out of six, at $332.0$\,s per attempt. The clean arm tracks the original
+images five out of six, at \reptime\ per attempt. The clean arm tracks the original
 work closely at a mean $p$ of $0.480$ against $0.472$, which is the arm that most
 directly validates the detector as configured.
 
-The finding we would most want carried forward has to do with the detector's interface
+The finding with the widest reach has to do with the detector's interface
 rather than the attack. The released detector computes a non-central $\chi^2$
 statistic and returns only its CDF. Recovering that statistic, exactly rather than
 approximately, shows that two natural scores built from it separate the forged arm at
@@ -963,8 +1008,8 @@ We also report predictions that failed. We had inferred the detector's $p$-value
 left-censored at zero; across eighteen observations it was never zero, with a minimum
 of $5.45 \times 10^{-49}$. We had assumed the half-precision fault localised to the
 autoencoder before building anything capable of testing it, and the probe we did build
-ran against an already-patched fork. In both cases an artifact of presentation was
-read as evidence about underlying values. A reproduction that surfaces only its
+ran against an already-patched fork. In both cases we trusted what the code appeared
+to do over what it measurably did. A reproduction that surfaces only its
 confirmed predictions has not shown it could catch one that failed.
 
 The immediate next step is to vary the watermark key across clusters, which is the
@@ -972,7 +1017,7 @@ binding limitation here, and to pass both genuine and forged populations through
 matched laundering channels so the distributions being compared have had identical
 handling.
 
-\section*{Division of Work}
+\section*{Author Contributions}
 
 Saifur Rahman Tamim designed the gate protocol, built the environment reconstruction
 and provenance pinning, wrote the mixed-precision patch and probe, and implemented the
@@ -985,6 +1030,13 @@ alongside the first author. A.M. Tayeful Islam
 advised on experimental design and reviewed the manuscript. All authors contributed
 to the analysis and the writing.
 
+\section*{Use of Generative AI}
+
+Generative AI language tools were used during drafting and editing of this manuscript.
+All technical claims, measurements, calculations and citations were verified by the
+authors against the released artifacts, and the authors take full responsibility for
+the content.
+
 \section*{Availability}
 
 Two repositories accompany this work. The reproduction notebook, the gate artifacts
@@ -993,7 +1045,11 @@ Two repositories accompany this work. The reproduction notebook, the gate artifa
 \code{phase0\_verdict.json}, \code{session\_meta.json}), the statistical re-analysis
 script (\code{stat\_analysis.py}), the figure-generating script and the source of
 this paper are at\\
-\url{https://github.com/sr-tamim/watermark-forgery-research}.
+\url{https://github.com/sr-tamim/watermark-forgery-research},
+tagged \code{arxiv-v1} at the state described here. The notebook was re-executed in an
+independent session on 8 September 2026 from a clean environment build;
+\code{session\_meta.json} for both sessions records the same fork commit and the same
+dependency-lock SHA-256.
 
 The modified attack code is a fork of M\"uller et al.'s released
 repository~\cite{semanticforgery-repo}, at\\

@@ -11,7 +11,8 @@ plt.rcParams.update({
     "axes.spines.top": False, "axes.spines.right": False,
     "figure.dpi": 400, "savefig.bbox": "tight", "savefig.pad_inches": 0.02,
 })
-U = "/mnt/user-data/uploads/"
+# paper figures are drawn from session 1; run from paper/: python mkfigs.py
+U = "../experiments/2026-08-28_session1/"
 df = pd.read_csv(U+"phase0_scores.csv"); df["c"] = df.lambd - df.x
 TAU = 0.0261008646426459
 COL = {"clean": "#8c8c8c", "forged": "#c8632a", "genuine": "#2f6f4e"}
