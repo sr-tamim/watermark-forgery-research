@@ -1,6 +1,6 @@
 # Forging Tree-Ring: Reproducing and Instrumenting Black-Box Semantic Watermark Forgery
 
-[![arXiv](https://img.shields.io/badge/arXiv-ARXIV__ID-b31b1b.svg)](https://arxiv.org/abs/ARXIV_ID)
+[![arXiv](https://img.shields.io/badge/arXiv-2609.12909-b31b1b.svg)](https://arxiv.org/abs/2609.12909)
 [![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 [![Paper & data: CC BY 4.0](https://img.shields.io/badge/paper%20%26%20data-CC%20BY%204.0-lightgrey.svg)](LICENSE-CC-BY-4.0)
 
@@ -16,7 +16,7 @@ Diffusion XL. We ran it on free-tier dual NVIDIA T4 GPUs (14.6 GB each).
 The git tag
 [`arxiv-v1`](https://github.com/sr-tamim/watermark-forgery-research/tree/arxiv-v1)
 marks the state described in the
-arXiv paper.
+[arXiv paper](https://arxiv.org/abs/2609.12909) (v1, 11 Sep 2026, cs.CR).
 
 ## Summary
 
@@ -45,6 +45,7 @@ key and *n* = 18), and discussion.
 
 ```
 .
+├── CITATION.cff                    citation metadata (GitHub "Cite this repository")
 ├── paper/                          LaTeX source of the arXiv paper
 │   ├── main.tex, refs.bib          paper source (as submitted)
 │   ├── main.pdf                    compiled paper
@@ -109,8 +110,13 @@ python mkfigs.py
              Semantic Watermark Forgery},
   author  = {Tamim, Saifur Rahman and Toufique, Md Taslimul Hasan and
              Islam, A.M. Tayeful},
-  journal = {arXiv preprint arXiv:ARXIV_ID},
-  year    = {2026}
+  journal = {arXiv preprint arXiv:2609.12909},
+  year    = {2026},
+  eprint        = {2609.12909},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CR},
+  doi     = {10.48550/arXiv.2609.12909},
+  url     = {https://arxiv.org/abs/2609.12909}
 }
 ```
 
