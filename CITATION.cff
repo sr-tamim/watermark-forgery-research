@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the paper below."
+title: "Forging Tree-Ring: Reproducing and Instrumenting Black-Box Semantic Watermark Forgery"
+authors:
+  - family-names: Tamim
+    given-names: Saifur Rahman
+    affiliation: Northern University Bangladesh
+  - family-names: Toufique
+    given-names: Md Taslimul Hasan
+    affiliation: Northern University Bangladesh
+  - family-names: Islam
+    given-names: A.M. Tayeful
+    affiliation: Northern University Bangladesh
+repository-code: "https://github.com/sr-tamim/watermark-forgery-research"
+license:
+  - MIT
+  - CC-BY-4.0
+version: arxiv-v1
+keywords:
+  - semantic watermarking
+  - Tree-Ring
+  - watermark forgery
+  - diffusion models
+  - reproducibility
+preferred-citation:
+  type: article
+  title: "Forging Tree-Ring: Reproducing and Instrumenting Black-Box Semantic Watermark Forgery"
+  authors:
+    - family-names: Tamim
+      given-names: Saifur Rahman
+    - family-names: Toufique
+      given-names: Md Taslimul Hasan
+    - family-names: Islam
+      given-names: A.M. Tayeful
+  year: 2026
+  journal: "arXiv preprint"
+  doi: "10.48550/arXiv.2609.12909"
+  identifiers:
+    - type: doi
+      value: "10.48550/arXiv.2609.12909"
+    - type: other
+      value: "arXiv:2609.12909"
+  url: "https://arxiv.org/abs/2609.12909"
